@@ -1,0 +1,22 @@
+[
+  { "type": "heading", "defaultValue": "App Configuration" },
+  {
+    "type": "section",
+    "items": [
+      { "type": "heading", "defaultValue": "Colors" },
+      { "type": "color",  "messageKey": "color_background", "defaultValue": "0x000055", "label": "color_background", "capabilities": ["COLOR"] },
+      { "type": "color",  "messageKey": "color_time_text", "defaultValue": "0xFF5500", "label": "color_time_text", "capabilities": ["COLOR"] }
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      { "type": "heading", "defaultValue": "Behavior" },
+      { "type": "toggle",  "messageKey": "include_seconds", "defaultValue": true, "label": "include_seconds"}
+    ]
+  },
+  {
+    "type": "submit",
+    "defaultValue": "Save Settings"
+  }
+]

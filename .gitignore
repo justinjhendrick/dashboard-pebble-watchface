@@ -1,4 +1,10 @@
+# pebble
 build/
-.vscode
 .lock-waf_linux_build
+
+# pebble-clay
 node_modules
+
+# IDEs
+*.swp
+.vscode
