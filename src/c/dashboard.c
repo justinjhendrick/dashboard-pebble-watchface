@@ -9,6 +9,7 @@ static char s_buffer[BUFFER_LEN];
 #define BBOX_DEBUG (false)
 #define SETTINGS_VERSION_KEY (1)
 #define SETTINGS_KEY (2)
+#define ROUND (PBL_IF_ROUND_ELSE(true, false))
 
 typedef struct ClaySettings {
   GColor color_background;
@@ -23,28 +24,12 @@ typedef struct ClaySettings {
 ClaySettings settings;
 
 static void default_settings() {
-  settings.color_background = GColorOxfordBlue;
-  settings.color_time_text = GColorChromeYellow;
-  settings.color_corner_title = GColorVividCerulean;
-  settings.color_corner_value = GColorChromeYellow;
-  settings.color_separator = GColorChromeYellow;
+  settings.color_background   = COLOR_FALLBACK(GColorOxfordBlue,      GColorBlack);
+  settings.color_time_text    = COLOR_FALLBACK(GColorChromeYellow,    GColorWhite);
+  settings.color_corner_title = COLOR_FALLBACK(GColorVividCerulean,   GColorWhite);
+  settings.color_corner_value = COLOR_FALLBACK(GColorChromeYellow,    GColorWhite);
+  settings.color_separator    = COLOR_FALLBACK(GColorChromeYellow,    GColorWhite);
   settings.include_seconds = true;
-}
-
-static void format_time(struct tm* now, char* buf, int buf_len) {
-  if (clock_is_24h_style()) {
-    if (settings.include_seconds) {
-      strftime(buf, buf_len, "%H:%M:%S", now);
-    } else {
-      strftime(buf, buf_len, "%H:%M", now);
-    }
-  } else {
-    if (settings.include_seconds) {
-      strftime(buf, buf_len, "%I:%M:%S", now);
-    } else {
-      strftime(buf, buf_len, "%I:%M", now);
-    }
-  }
 }
 
 static void debug_bbox(GContext* ctx, GRect bbox) {
@@ -58,7 +43,7 @@ static void debug_bbox(GContext* ctx, GRect bbox) {
 static void draw_time(GContext* ctx, struct tm* now, GFont font, GRect bbox) {
   debug_bbox(ctx, bbox);
   graphics_context_set_text_color(ctx, settings.color_time_text);
-  format_time(now, s_buffer, BUFFER_LEN);
+  format_time(now, settings.include_seconds, s_buffer, BUFFER_LEN);
   graphics_draw_text(ctx, s_buffer, font, bbox, GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
 }
 
@@ -97,9 +82,10 @@ static void draw_separator(GContext* ctx, GRect bbox, bool is_bot) {
   if (is_bot) {
     height += bbox.size.h - 1;
   }
+  int width = bbox.size.w;
   graphics_draw_line(ctx,
-    GPoint(bbox.origin.x               + 10, height),
-    GPoint(bbox.origin.x + bbox.size.w - 10, height)
+    GPoint(bbox.origin.x + width * 0.1, height),
+    GPoint(bbox.origin.x + width * 0.9, height)
   );
 }
 
@@ -119,8 +105,7 @@ static void draw_date(GContext* ctx, GRect bbox, bool sep_on_bot) {
   hsplit_rect(ctx, bbox, &upper, &lower);
   snprintf(s_buffer, BUFFER_LEN, "%s", "Date");
   draw_title(ctx, upper);
-  BatteryChargeState bcs = battery_state_service_peek();
-  snprintf(s_buffer, BUFFER_LEN, "%s/%s", "xx", "yy");
+  snprintf(s_buffer, BUFFER_LEN, "%s/%s", "xx", "yy");  // TODO (mm/dd and dd/mm)
   draw_value(ctx, lower);
   draw_separator(ctx, bbox, sep_on_bot);
 }
@@ -130,7 +115,7 @@ static void draw_steps(GContext* ctx, GRect bbox, bool sep_on_bot) {
   hsplit_rect(ctx, bbox, &upper, &lower);
   snprintf(s_buffer, BUFFER_LEN, "%s", "Steps");
   draw_title(ctx, upper);
-  snprintf(s_buffer, BUFFER_LEN, "%s", "zzzz");
+  snprintf(s_buffer, BUFFER_LEN, "%s", "zzzz"); // TODO
   draw_value(ctx, lower);
   draw_separator(ctx, bbox, sep_on_bot);
 }
@@ -140,7 +125,7 @@ static void draw_temp(GContext* ctx, GRect bbox, bool sep_on_bot) {
   hsplit_rect(ctx, bbox, &upper, &lower);
   snprintf(s_buffer, BUFFER_LEN, "%s", "Weather");
   draw_title(ctx, upper);
-  snprintf(s_buffer, BUFFER_LEN, "%s°", "--");
+  snprintf(s_buffer, BUFFER_LEN, "%s°", "--"); // TODO
   draw_value(ctx, lower);
   draw_separator(ctx, bbox, sep_on_bot);
 }
@@ -149,22 +134,39 @@ static void update_layer(Layer* layer, GContext* ctx) {
   time_t temp = time(NULL);
   struct tm* now = localtime(&temp);
 
-  GRect bounds = layer_get_bounds(layer);
+  GRect bounds = layer_get_unobstructed_bounds(layer);
   graphics_context_set_fill_color(ctx, settings.color_background);
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
 
-  GPoint center = grect_center_point(&bounds);
+  GRect visible = bounds;
+  if (ROUND) {
+    int w = bounds.size.w;
+    int h = bounds.size.h;
+    visible = GRect(
+      bounds.origin.x + w * 0.1,
+      bounds.origin.y + h * 0.1,
+      w * 0.8,
+      h * 0.8
+    );
+  }
+
+  GPoint center = grect_center_point(&visible);
   GFont main_font = fonts_get_system_font(FONT_KEY_ROBOTO_BOLD_SUBSET_49);
-  GRect time_bbox = rect_from_center(center, GSize(bounds.size.w, 49 + 14));
+  GRect time_bbox = rect_from_center(center, GSize(visible.size.w, 49 + 14));
+  if (visible.size.h < 200) {
+    // TODO find a monospace font. Time jitters left/right
+    main_font = fonts_get_system_font(FONT_KEY_BITHAM_34_MEDIUM_NUMBERS);
+    time_bbox = rect_from_center(center, GSize(visible.size.w, 34 + 10));
+  }
   draw_time(ctx, now, main_font, time_bbox);
 
-  int complication_avail_height = (bounds.size.h - time_bbox.size.h) / 2;
+  int complication_avail_height = (visible.size.h - time_bbox.size.h) / 2;
   int complication_height = complication_avail_height * 3 / 4;
-  GSize complication_size = GSize(bounds.size.w / 2, complication_height);
-  int left  = bounds.origin.x + bounds.size.w / 4;
-  int right = bounds.origin.x + bounds.size.w * 3 / 4;
-  int top = bounds.origin.y                 + complication_avail_height / 2;
-  int bot = bounds.origin.y + bounds.size.h - complication_avail_height / 2;
+  GSize complication_size = GSize(visible.size.w / 2, complication_height);
+  int left  = visible.origin.x + visible.size.w / 4;
+  int right = visible.origin.x + visible.size.w * 3 / 4;
+  int top = visible.origin.y                 + complication_avail_height / 2;
+  int bot = visible.origin.y + visible.size.h - complication_avail_height / 2;
   bool sep_bot = true;
   bool sep_top = false;
 
@@ -226,6 +228,7 @@ static void init(void) {
     .unload = window_unload,
   });
   window_stack_push(s_window, true);
+  // TODO: need to re-subscribe when this value changes
   tick_timer_service_subscribe(settings.include_seconds ? SECOND_UNIT : MINUTE_UNIT, tick_handler);
 }
 

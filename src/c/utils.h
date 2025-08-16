@@ -23,6 +23,22 @@ static int max(int a, int b) {
   return b;
 }
 
+static void format_time(struct tm* now, bool include_seconds, char* buf, int buf_len) {
+  if (clock_is_24h_style()) {
+    if (include_seconds) {
+      strftime(buf, buf_len, "%H:%M:%S", now);
+    } else {
+      strftime(buf, buf_len, "%H:%M", now);
+    }
+  } else {
+    if (include_seconds) {
+      strftime(buf, buf_len, "%I:%M:%S", now);
+    } else {
+      strftime(buf, buf_len, "%I:%M", now);
+    }
+  }
+}
+
 static void draw_text_valign(GContext* ctx, const char* buffer, GRect bbox, GTextAlignment align, bool bold, int valign) {
   int h = bbox.size.h;
   int font_height = 0;
