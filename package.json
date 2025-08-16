@@ -1,26 +1,23 @@
 {
   "name": "dashboard",
-  "author": "MakeAwesomeHappen",
+  "author": "justinjhendrick, SocketMix",
   "version": "1.0.0",
   "keywords": ["pebble-app"],
   "private": true,
   "dependencies": {},
   "pebble": {
-    "displayName": "dashboard",
+    "displayName": "Dashboard",
     "uuid": "658a0530-fdbb-4573-a047-303111dee408",
     "sdkVersion": "3",
     "enableMultiJS": true,
     "targetPlatforms": [
-      "aplite",
-      "basalt",
-      "chalk",
-      "diorite"
+	"emery"
     ],
     "watchapp": {
-      "watchface": false
+      "watchface": true
     },
     "messageKeys": [
-      "dummy"
+      "color_background"
     ],
     "resources": {
       "media": []
