@@ -62,36 +62,88 @@ static void draw_time(GContext* ctx, struct tm* now, GFont font, GRect bbox) {
   graphics_draw_text(ctx, s_buffer, font, bbox, GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
 }
 
-static void draw_batt(GContext* ctx, GRect bbox) {
-  GRect upper = GRect(
+static void hsplit_rect(GContext* ctx, GRect bbox, GRect* upper, GRect* lower) {
+  // Upper is one third of the height(for title)
+  *upper = GRect(
     bbox.origin.x,
     bbox.origin.y,
     bbox.size.w,
     bbox.size.h / 3
   );
-  debug_bbox(ctx, upper);
-  graphics_context_set_text_color(ctx, settings.color_corner_title);
-  snprintf(s_buffer, BUFFER_LEN, "%s", "Battery");
-  draw_text_midalign(ctx, s_buffer, upper, GTextAlignmentCenter, false);
-
-  GRect lower = GRect(
+  // Lower is two thirds of the height (for value)
+  *lower = GRect(
     bbox.origin.x,
     bbox.origin.y + bbox.size.h / 3,
     bbox.size.w,
     bbox.size.h * 2 / 3
   );
-  debug_bbox(ctx, lower);
-  graphics_context_set_text_color(ctx, settings.color_corner_value);
-  BatteryChargeState bcs = battery_state_service_peek();
-  snprintf(s_buffer, BUFFER_LEN, "%d%%", bcs.charge_percent);
-  draw_text_topalign(ctx, s_buffer, lower, GTextAlignmentCenter, true);
+  debug_bbox(ctx, *upper);
+  debug_bbox(ctx, *lower);
+}
 
+static void draw_title(GContext* ctx, GRect bbox) {
+  graphics_context_set_text_color(ctx, settings.color_corner_title);
+  draw_text_midalign(ctx, s_buffer, bbox, GTextAlignmentCenter, false);
+}
+
+static void draw_value(GContext* ctx, GRect bbox) {
+  graphics_context_set_text_color(ctx, settings.color_corner_value);
+  draw_text_topalign(ctx, s_buffer, bbox, GTextAlignmentCenter, true);
+}
+
+static void draw_separator(GContext* ctx, GRect bbox, bool is_bot) {
   graphics_context_set_stroke_width(ctx, 1);
   graphics_context_set_stroke_color(ctx, settings.color_separator);
+  int height = bbox.origin.y;
+  if (is_bot) {
+    height += bbox.size.h;
+  }
   graphics_draw_line(ctx,
-    GPoint(lower.origin.x                + 10, lower.origin.y + lower.size.h),
-    GPoint(lower.origin.x + lower.size.w - 10, lower.origin.y + lower.size.h)
+    GPoint(bbox.origin.x               + 10, height),
+    GPoint(bbox.origin.x + bbox.size.w - 10, height)
   );
+}
+
+static void draw_batt(GContext* ctx, GRect bbox, bool sep_on_bot) {
+  GRect upper, lower;
+  hsplit_rect(ctx, bbox, &upper, &lower);
+  snprintf(s_buffer, BUFFER_LEN, "%s", "Battery");
+  draw_title(ctx, upper);
+  BatteryChargeState bcs = battery_state_service_peek();
+  snprintf(s_buffer, BUFFER_LEN, "%d%%", bcs.charge_percent);
+  draw_value(ctx, lower);
+  draw_separator(ctx, bbox, sep_on_bot);
+}
+
+static void draw_date(GContext* ctx, GRect bbox, bool sep_on_bot) {
+  GRect upper, lower;
+  hsplit_rect(ctx, bbox, &upper, &lower);
+  snprintf(s_buffer, BUFFER_LEN, "%s", "Date");
+  draw_title(ctx, upper);
+  BatteryChargeState bcs = battery_state_service_peek();
+  snprintf(s_buffer, BUFFER_LEN, "%s/%s", "xx", "yy");
+  draw_value(ctx, lower);
+  draw_separator(ctx, bbox, sep_on_bot);
+}
+
+static void draw_steps(GContext* ctx, GRect bbox, bool sep_on_bot) {
+  GRect upper, lower;
+  hsplit_rect(ctx, bbox, &upper, &lower);
+  snprintf(s_buffer, BUFFER_LEN, "%s", "Steps");
+  draw_title(ctx, upper);
+  snprintf(s_buffer, BUFFER_LEN, "%s", "zzzz");
+  draw_value(ctx, lower);
+  draw_separator(ctx, bbox, sep_on_bot);
+}
+
+static void draw_temp(GContext* ctx, GRect bbox, bool sep_on_bot) {
+  GRect upper, lower;
+  hsplit_rect(ctx, bbox, &upper, &lower);
+  snprintf(s_buffer, BUFFER_LEN, "%s", "Weather");
+  draw_title(ctx, upper);
+  snprintf(s_buffer, BUFFER_LEN, "%s°", "--");
+  draw_value(ctx, lower);
+  draw_separator(ctx, bbox, sep_on_bot);
 }
 
 static void update_layer(Layer* layer, GContext* ctx) {
@@ -104,16 +156,23 @@ static void update_layer(Layer* layer, GContext* ctx) {
 
   GPoint center = grect_center_point(&bounds);
   GFont main_font = fonts_get_system_font(FONT_KEY_ROBOTO_BOLD_SUBSET_49);
-  GRect time_bbox = rect_from_midpoint(center, GSize(bounds.size.w, 49 + 14));
+  GRect time_bbox = rect_from_center(center, GSize(bounds.size.w, 49 + 14));
   draw_time(ctx, now, main_font, time_bbox);
 
   int complication_avail_height = (bounds.size.h - time_bbox.size.h) / 2;
-  GPoint tl_center = GPoint(
-    bounds.origin.x + bounds.size.w / 4,
-    bounds.origin.y + complication_avail_height / 2
-  );
-  GRect tl_corner = rect_from_midpoint(tl_center, GSize(bounds.size.w / 2, complication_avail_height * 3 / 4));
-  draw_batt(ctx, tl_corner);
+  int complication_height = complication_avail_height * 3 / 4;
+  GSize complication_size = GSize(bounds.size.w / 2, complication_height);
+  int left  = bounds.origin.x + bounds.size.w / 4;
+  int right = bounds.origin.x + bounds.size.w * 3 / 4;
+  int top = bounds.origin.y                 + complication_avail_height / 2;
+  int bot = bounds.origin.y + bounds.size.h - complication_avail_height / 2;
+  bool sep_bot = true;
+  bool sep_top = false;
+
+  draw_batt(ctx, rect_from_center(GPoint(left, top), complication_size), sep_bot);
+  draw_date(ctx, rect_from_center(GPoint(right, top), complication_size), sep_bot);
+  draw_steps(ctx, rect_from_center(GPoint(left, bot), complication_size), sep_top);
+  draw_temp(ctx, rect_from_center(GPoint(right, bot), complication_size), sep_top);
 }
 
 static void window_load(Window* window) {

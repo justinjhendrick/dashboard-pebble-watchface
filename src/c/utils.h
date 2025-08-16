@@ -1,10 +1,10 @@
 #pragma once
 #include <pebble.h>
 
-static GRect rect_from_midpoint(GPoint midpoint, GSize size) {
+static GRect rect_from_center(GPoint center, GSize size) {
   GRect ret;
-  ret.origin.x = midpoint.x - size.w / 2;
-  ret.origin.y = midpoint.y - size.h / 2;
+  ret.origin.x = center.x - size.w / 2;
+  ret.origin.y = center.y - size.h / 2;
   ret.size = size;
   return ret;
 }
