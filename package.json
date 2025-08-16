@@ -24,6 +24,9 @@
     "messageKeys": [
       "color_background",
       "color_time_text",
+      "color_corner_title",
+      "color_corner_value",
+      "color_separator",
       "include_seconds"
     ],
     "resources": {
