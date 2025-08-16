@@ -33,8 +33,8 @@
 - [x] configurable colors for the text, clock, and numbers
 - [x] Support 12hr and 24hr time
 - [x] Support hrs:mins:seconds
-- [ ] Support hrs:mins
+- [x] Support hrs:mins
 - [ ] Temperature in Celcius or Fahrenheit
-- [ ] Support DD/MM and MM/DD for dates
-- [ ] Show Step Count
+- [x] Support DD/MM and MM/DD for dates
+- [x] Show Step Count
 - [ ] Custom fonts?
