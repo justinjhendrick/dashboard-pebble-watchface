@@ -15,7 +15,8 @@
     "type": "section",
     "items": [
       { "type": "heading", "defaultValue": "Behavior" },
-      { "type": "toggle",  "messageKey": "include_seconds", "defaultValue": true, "label": "include_seconds"}
+      { "type": "toggle",  "messageKey": "include_seconds", "defaultValue": true,  "label": "include_seconds"},
+      { "type": "toggle",  "messageKey": "month_first",     "defaultValue": false, "label": "month_first"}
     ]
   },
   {

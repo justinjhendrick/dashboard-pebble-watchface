@@ -1,8 +1,8 @@
 #include <pebble.h>
 #include "utils.h"
 
-static Window* s_window;
-static Layer* s_layer;
+static Window* s_window = NULL;
+static Layer* s_layer = NULL;
 #define BUFFER_LEN (20)
 static char s_buffer[BUFFER_LEN];
 
@@ -17,7 +17,9 @@ typedef struct ClaySettings {
   GColor color_corner_title;
   GColor color_corner_value;
   GColor color_separator;
+
   bool include_seconds;
+  bool month_first;
   uint8_t reserved[40]; // for later growth
 } __attribute__((__packed__)) ClaySettings;
 
@@ -29,7 +31,9 @@ static void default_settings() {
   settings.color_corner_title = COLOR_FALLBACK(GColorVividCerulean,   GColorWhite);
   settings.color_corner_value = COLOR_FALLBACK(GColorChromeYellow,    GColorWhite);
   settings.color_separator    = COLOR_FALLBACK(GColorChromeYellow,    GColorWhite);
+
   settings.include_seconds = true;
+  settings.month_first     = false;
 }
 
 static void debug_bbox(GContext* ctx, GRect bbox) {
@@ -100,12 +104,12 @@ static void draw_batt(GContext* ctx, GRect bbox, bool sep_on_bot) {
   draw_separator(ctx, bbox, sep_on_bot);
 }
 
-static void draw_date(GContext* ctx, GRect bbox, bool sep_on_bot) {
+static void draw_date(GContext* ctx, GRect bbox, bool sep_on_bot, struct tm* now) {
   GRect upper, lower;
   hsplit_rect(ctx, bbox, &upper, &lower);
   snprintf(s_buffer, BUFFER_LEN, "%s", "Date");
   draw_title(ctx, upper);
-  snprintf(s_buffer, BUFFER_LEN, "%s/%s", "xx", "yy");  // TODO (mm/dd and dd/mm)
+  format_date(now, settings.month_first, s_buffer, BUFFER_LEN);
   draw_value(ctx, lower);
   draw_separator(ctx, bbox, sep_on_bot);
 }
@@ -115,7 +119,8 @@ static void draw_steps(GContext* ctx, GRect bbox, bool sep_on_bot) {
   hsplit_rect(ctx, bbox, &upper, &lower);
   snprintf(s_buffer, BUFFER_LEN, "%s", "Steps");
   draw_title(ctx, upper);
-  snprintf(s_buffer, BUFFER_LEN, "%s", "zzzz"); // TODO
+  int steps = health_service_sum_today(HealthMetricStepCount);
+  snprintf(s_buffer, BUFFER_LEN, "%d", steps);
   draw_value(ctx, lower);
   draw_separator(ctx, bbox, sep_on_bot);
 }
@@ -171,7 +176,7 @@ static void update_layer(Layer* layer, GContext* ctx) {
   bool sep_top = false;
 
   draw_batt(ctx, rect_from_center(GPoint(left, top), complication_size), sep_bot);
-  draw_date(ctx, rect_from_center(GPoint(right, top), complication_size), sep_bot);
+  draw_date(ctx, rect_from_center(GPoint(right, top), complication_size), sep_bot, now);
   draw_steps(ctx, rect_from_center(GPoint(left, bot), complication_size), sep_top);
   draw_temp(ctx, rect_from_center(GPoint(right, bot), complication_size), sep_top);
 }
@@ -186,22 +191,23 @@ static void window_load(Window* window) {
 }
 
 static void window_unload(Window* window) {
-  layer_destroy(s_layer);
+  if (s_layer) { layer_destroy(s_layer); }
 }
 
 static void tick_handler(struct tm* now, TimeUnits units_changed) {
-  layer_mark_dirty(window_get_root_layer(s_window));
+  if (s_layer) { layer_mark_dirty(s_layer); }
 }
 
 static void load_settings() {
   default_settings();
   // If we need a new version of settings, check SETTINGS_VERSION_KEY and migrate
-  persist_read_data(SETTINGS_KEY, &settings, sizeof(settings));
+  persist_read_data(SETTINGS_KEY, &settings, sizeof(ClaySettings));
+  tick_timer_service_subscribe(settings.include_seconds ? SECOND_UNIT : MINUTE_UNIT, tick_handler);
 }
 
 static void save_settings() {
   persist_write_int(SETTINGS_VERSION_KEY, 1);
-  persist_write_data(SETTINGS_KEY, &settings, sizeof(settings));
+  persist_write_data(SETTINGS_KEY, &settings, sizeof(ClaySettings));
 }
 
 static void inbox_received_handler(DictionaryIterator *iter, void *context) {
@@ -212,6 +218,7 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, MESSAGE_KEY_color_corner_value     ))) { settings.color_corner_value       = GColorFromHEX(t->value->int32); }
   if ((t = dict_find(iter, MESSAGE_KEY_color_separator        ))) { settings.color_separator          = GColorFromHEX(t->value->int32); }
   if ((t = dict_find(iter, MESSAGE_KEY_include_seconds        ))) { settings.include_seconds          = t->value->int8; }
+  if ((t = dict_find(iter, MESSAGE_KEY_month_first            ))) { settings.month_first              = t->value->int8; }
   save_settings();
   // Update the display based on new settings
   layer_mark_dirty(window_get_root_layer(s_window));
@@ -228,14 +235,10 @@ static void init(void) {
     .unload = window_unload,
   });
   window_stack_push(s_window, true);
-  // TODO: need to re-subscribe when this value changes
-  tick_timer_service_subscribe(settings.include_seconds ? SECOND_UNIT : MINUTE_UNIT, tick_handler);
 }
 
 static void deinit(void) {
-  if (s_window) {
-    window_destroy(s_window);
-  }
+  if (s_window) { window_destroy(s_window); }
 }
 
 int main(void) {
