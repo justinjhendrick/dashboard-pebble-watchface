@@ -63,19 +63,18 @@ static void draw_time(GContext* ctx, struct tm* now, GFont font, GRect bbox) {
 }
 
 static void hsplit_rect(GContext* ctx, GRect bbox, GRect* upper, GRect* lower) {
-  // Upper is one third of the height(for title)
+  int upper_h = bbox.size.h * 5 / 12;
   *upper = GRect(
     bbox.origin.x,
     bbox.origin.y,
     bbox.size.w,
-    bbox.size.h / 3
+    upper_h
   );
-  // Lower is two thirds of the height (for value)
   *lower = GRect(
     bbox.origin.x,
-    bbox.origin.y + bbox.size.h / 3,
+    bbox.origin.y + upper_h,
     bbox.size.w,
-    bbox.size.h * 2 / 3
+    bbox.size.h - upper_h
   );
   debug_bbox(ctx, *upper);
   debug_bbox(ctx, *lower);
@@ -88,7 +87,7 @@ static void draw_title(GContext* ctx, GRect bbox) {
 
 static void draw_value(GContext* ctx, GRect bbox) {
   graphics_context_set_text_color(ctx, settings.color_corner_value);
-  draw_text_topalign(ctx, s_buffer, bbox, GTextAlignmentCenter, true);
+  draw_text_midalign(ctx, s_buffer, bbox, GTextAlignmentCenter, true);
 }
 
 static void draw_separator(GContext* ctx, GRect bbox, bool is_bot) {
@@ -96,7 +95,7 @@ static void draw_separator(GContext* ctx, GRect bbox, bool is_bot) {
   graphics_context_set_stroke_color(ctx, settings.color_separator);
   int height = bbox.origin.y;
   if (is_bot) {
-    height += bbox.size.h;
+    height += bbox.size.h - 1;
   }
   graphics_draw_line(ctx,
     GPoint(bbox.origin.x               + 10, height),
