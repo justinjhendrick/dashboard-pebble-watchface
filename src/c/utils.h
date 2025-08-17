@@ -102,7 +102,7 @@ static void draw_text_valign(GContext* ctx, const char* buffer, GRect bbox, GTex
     shift_up = 0;
   }
   GRect fixed_bbox = GRect(bbox.origin.x, bbox.origin.y - shift_up, bbox.size.w, bbox.size.h);
-  graphics_draw_text(ctx, buffer, font, fixed_bbox, GTextOverflowModeWordWrap, align, NULL);
+  graphics_draw_text(ctx, buffer, font, fixed_bbox, GTextOverflowModeFill, align, NULL);
 }
 
 static void draw_text_midalign(GContext* ctx, const char* buffer, GRect bbox, GTextAlignment align, bool bold) {

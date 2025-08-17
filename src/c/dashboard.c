@@ -5,6 +5,9 @@ static Window* s_window = NULL;
 static Layer* s_layer = NULL;
 #define BUFFER_LEN (20)
 static char s_buffer[BUFFER_LEN];
+static GFont s_font_48 = NULL;
+static GFont s_font_36 = NULL;
+static GFont s_font_24 = NULL;
 
 #define BBOX_DEBUG (false)
 #define SETTINGS_VERSION_KEY (1)
@@ -44,11 +47,25 @@ static void debug_bbox(GContext* ctx, GRect bbox) {
   }
 }
 
-static void draw_time(GContext* ctx, struct tm* now, GFont font, GRect bbox) {
+static int draw_time(GContext* ctx, struct tm* now, GRect visible) {
+  GPoint center = grect_center_point(&visible);
+  GFont font;
+  GRect bbox;
+  if (!ROUND && visible.size.h < 160) {
+    font = s_font_24;
+    bbox = rect_from_center(center, GSize(visible.size.w, 24 * 5 / 4));
+  } else if (visible.size.h < 200) {
+    font = s_font_36;
+    bbox = rect_from_center(center, GSize(visible.size.w, 36 * 5 / 4));
+  } else {
+    font = s_font_48;
+    bbox = rect_from_center(center, GSize(visible.size.w, 48 * 5 / 4));
+  }
   debug_bbox(ctx, bbox);
   graphics_context_set_text_color(ctx, settings.color_time_text);
   format_time(now, settings.include_seconds, s_buffer, BUFFER_LEN);
-  graphics_draw_text(ctx, s_buffer, font, bbox, GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+  graphics_draw_text(ctx, s_buffer, font, bbox, GTextOverflowModeFill, GTextAlignmentCenter, NULL);
+  return bbox.size.h;
 }
 
 static void hsplit_rect(GContext* ctx, GRect bbox, GRect* upper, GRect* lower) {
@@ -88,8 +105,8 @@ static void draw_separator(GContext* ctx, GRect bbox, bool is_bot) {
   }
   int width = bbox.size.w;
   graphics_draw_line(ctx,
-    GPoint(bbox.origin.x + width * 0.1, height),
-    GPoint(bbox.origin.x + width * 0.9, height)
+    GPoint(bbox.origin.x + width * 1 / 10, height),
+    GPoint(bbox.origin.x + width * 9 / 10, height)
   );
 }
 
@@ -148,37 +165,32 @@ static void update_layer(Layer* layer, GContext* ctx) {
     int w = bounds.size.w;
     int h = bounds.size.h;
     visible = GRect(
-      bounds.origin.x + w * 0.1,
-      bounds.origin.y + h * 0.1,
-      w * 0.8,
-      h * 0.8
+      bounds.origin.x + w / 10,
+      bounds.origin.y + h / 10,
+      w * 8 / 10,
+      h * 8 / 10
     );
   }
 
-  GPoint center = grect_center_point(&visible);
-  GFont main_font = fonts_get_system_font(FONT_KEY_ROBOTO_BOLD_SUBSET_49);
-  GRect time_bbox = rect_from_center(center, GSize(visible.size.w, 49 + 14));
-  if (visible.size.h < 200) {
-    // TODO find a monospace font. Time jitters left/right
-    main_font = fonts_get_system_font(FONT_KEY_BITHAM_34_MEDIUM_NUMBERS);
-    time_bbox = rect_from_center(center, GSize(visible.size.w, 34 + 10));
-  }
-  draw_time(ctx, now, main_font, time_bbox);
+  int time_bbox_height = draw_time(ctx, now, visible);
 
-  int complication_avail_height = (visible.size.h - time_bbox.size.h) / 2;
+  int complication_avail_height = (visible.size.h - time_bbox_height) / 2;
   int complication_height = complication_avail_height * 3 / 4;
+  if (!ROUND && visible.size.h < 160) {
+    complication_height = complication_avail_height;
+  }
   GSize complication_size = GSize(visible.size.w / 2, complication_height);
   int left  = visible.origin.x + visible.size.w / 4;
   int right = visible.origin.x + visible.size.w * 3 / 4;
-  int top = visible.origin.y                 + complication_avail_height / 2;
+  int top = visible.origin.y                  + complication_avail_height / 2;
   int bot = visible.origin.y + visible.size.h - complication_avail_height / 2;
   bool sep_bot = true;
   bool sep_top = false;
 
-  draw_batt(ctx, rect_from_center(GPoint(left, top), complication_size), sep_bot);
-  draw_date(ctx, rect_from_center(GPoint(right, top), complication_size), sep_bot, now);
-  draw_steps(ctx, rect_from_center(GPoint(left, bot), complication_size), sep_top);
-  draw_temp(ctx, rect_from_center(GPoint(right, bot), complication_size), sep_top);
+  draw_batt(ctx,  rect_from_center(GPoint(left,  top), complication_size), sep_bot);
+  draw_date(ctx,  rect_from_center(GPoint(right, top), complication_size), sep_bot, now);
+  draw_steps(ctx, rect_from_center(GPoint(left,  bot), complication_size), sep_top);
+  draw_temp(ctx,  rect_from_center(GPoint(right, bot), complication_size), sep_top);
 }
 
 static void window_load(Window* window) {
@@ -225,6 +237,10 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
 }
 
 static void init(void) {
+  s_font_48 = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_48));
+  s_font_36 = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_36));
+  s_font_24 = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_24));
+
   load_settings();
   app_message_register_inbox_received(inbox_received_handler);
   app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
@@ -239,6 +255,9 @@ static void init(void) {
 
 static void deinit(void) {
   if (s_window) { window_destroy(s_window); }
+  if (s_font_24) { fonts_unload_custom_font(s_font_24); }
+  if (s_font_36) { fonts_unload_custom_font(s_font_36); }
+  if (s_font_48) { fonts_unload_custom_font(s_font_48); }
 }
 
 int main(void) {

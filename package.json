@@ -35,7 +35,11 @@
       "month_first"
     ],
     "resources": {
-      "media": []
+      "media": [
+        {"name": "ROBOTO_48", "file": "fonts/Roboto-Regular.ttf", "characterRegex": "[0-9:]", "type": "font"},
+        {"name": "ROBOTO_36", "file": "fonts/Roboto-Regular.ttf", "characterRegex": "[0-9:]", "type": "font"},
+        {"name": "ROBOTO_24", "file": "fonts/Roboto-Regular.ttf", "characterRegex": "[0-9:]", "type": "font"}
+      ]
     }
   }
 }

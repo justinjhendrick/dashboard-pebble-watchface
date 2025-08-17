@@ -37,4 +37,4 @@
 - [ ] Temperature in Celcius or Fahrenheit
 - [x] Support DD/MM and MM/DD for dates
 - [x] Show Step Count
-- [ ] Custom fonts?
+- [x] Custom fonts
