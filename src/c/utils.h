@@ -40,16 +40,11 @@ static void format_time(struct tm* now, bool include_seconds, char* buf, int buf
 }
 
 static void format_date(struct tm* now, bool month_first, char* buf, int buf_len) {
-  int first = 0;
-  int second = 0;
   if (month_first) {
-    first = now->tm_mon + 1;
-    second = now->tm_mday;
+    strftime(buf, buf_len, "%m/%d", now);
   } else {
-    first = now->tm_mday;
-    second = now->tm_mon + 1;
+    strftime(buf, buf_len, "%d/%m", now);
   }
-  snprintf(buf, buf_len, "%d/%d", first, second);
 }
 
 static void draw_text_valign(GContext* ctx, const char* buffer, GRect bbox, GTextAlignment align, bool bold, int valign) {

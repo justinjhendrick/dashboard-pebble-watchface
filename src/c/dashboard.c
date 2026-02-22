@@ -42,7 +42,7 @@ static void default_settings() {
 static void debug_bbox(GContext* ctx, GRect bbox) {
   if (BBOX_DEBUG) {
     graphics_context_set_stroke_width(ctx, 1);
-    graphics_context_set_stroke_color(ctx, GColorWhite);
+    graphics_context_set_stroke_color(ctx, GColorBlack);
     graphics_draw_rect(ctx, bbox);
   }
 }
@@ -86,6 +86,28 @@ static void hsplit_rect(GContext* ctx, GRect bbox, GRect* upper, GRect* lower) {
   debug_bbox(ctx, *lower);
 }
 
+static void vsplit_rect(GContext* ctx, GRect bbox, GRect* left, GRect* right, bool left_is_wider) {
+  int left_w = bbox.size.w * 3 / 5;
+  if (left_is_wider) {
+    left_w = bbox.size.w * 2 / 3;
+  }
+  int right_h = bbox.size.h / 2;
+  *left = GRect(
+    bbox.origin.x,
+    bbox.origin.y,
+    left_w,
+    bbox.size.h
+  );
+  *right = GRect(
+    bbox.origin.x + left_w,
+    bbox.origin.y + (bbox.size.h - right_h) / 2,
+    bbox.size.w - left_w,
+    right_h
+  );
+  debug_bbox(ctx, *left);
+  debug_bbox(ctx, *right);
+}
+
 static void draw_title(GContext* ctx, GRect bbox) {
   graphics_context_set_text_color(ctx, settings.color_corner_title);
   draw_text_midalign(ctx, s_buffer, bbox, GTextAlignmentCenter, false);
@@ -111,23 +133,36 @@ static void draw_separator(GContext* ctx, GRect bbox, bool is_bot) {
 }
 
 static void draw_batt(GContext* ctx, GRect bbox, bool sep_on_bot) {
-  GRect upper, lower;
+  GRect upper, lower, left, right;
   hsplit_rect(ctx, bbox, &upper, &lower);
+  vsplit_rect(ctx, lower, &left, &right, false);
+
   snprintf(s_buffer, BUFFER_LEN, "%s", "Battery");
   draw_title(ctx, upper);
+
+  graphics_context_set_text_color(ctx, settings.color_corner_value);
   BatteryChargeState bcs = battery_state_service_peek();
-  snprintf(s_buffer, BUFFER_LEN, "%d%%", bcs.charge_percent);
-  draw_value(ctx, lower);
+  snprintf(s_buffer, BUFFER_LEN, "%d", bcs.charge_percent);
+  draw_text_midalign(ctx, s_buffer, left, GTextAlignmentRight, true);
+  s_buffer[0] = '%';
+  s_buffer[1] = '\0';
+  draw_text_midalign(ctx, s_buffer, right, GTextAlignmentLeft, false);
   draw_separator(ctx, bbox, sep_on_bot);
 }
 
 static void draw_date(GContext* ctx, GRect bbox, bool sep_on_bot, struct tm* now) {
-  GRect upper, lower;
+  GRect upper, lower, left, right;
   hsplit_rect(ctx, bbox, &upper, &lower);
+  vsplit_rect(ctx, lower, &left, &right, true);
+
   snprintf(s_buffer, BUFFER_LEN, "%s", "Date");
   draw_title(ctx, upper);
+
+  graphics_context_set_text_color(ctx, settings.color_corner_value);
   format_date(now, settings.month_first, s_buffer, BUFFER_LEN);
-  draw_value(ctx, lower);
+  draw_text_midalign(ctx, s_buffer, left, GTextAlignmentRight, true);
+  strftime(s_buffer, BUFFER_LEN, "%a", now);
+  draw_text_midalign(ctx, s_buffer, right, GTextAlignmentCenter, false);
   draw_separator(ctx, bbox, sep_on_bot);
 }
 
