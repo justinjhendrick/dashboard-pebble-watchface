@@ -28,7 +28,8 @@
       "color_corner_value",
       "color_separator",
       "include_seconds",
-      "month_first"
+      "month_first",
+      "weather_now_temp_c"
     ],
     "resources": {
       "media": [

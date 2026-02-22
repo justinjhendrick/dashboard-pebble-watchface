@@ -39,6 +39,12 @@ static void default_settings() {
   settings.month_first     = false;
 }
 
+typedef struct Weather {
+  int32_t temp_c; // TODO decimal points?
+} Weather;
+
+Weather s_weather_now;
+
 static void debug_bbox(GContext* ctx, GRect bbox) {
   if (BBOX_DEBUG) {
     graphics_context_set_stroke_width(ctx, 1);
@@ -182,7 +188,11 @@ static void draw_temp(GContext* ctx, GRect bbox, bool sep_on_bot) {
   hsplit_rect(ctx, bbox, &upper, &lower);
   snprintf(s_buffer, BUFFER_LEN, "%s", "Weather");
   draw_title(ctx, upper);
-  snprintf(s_buffer, BUFFER_LEN, "%s°", "--"); // TODO
+  if (s_weather_now.temp_c == 999) {
+    snprintf(s_buffer, BUFFER_LEN, "%s°", "--");
+  } else {
+    snprintf(s_buffer, BUFFER_LEN, "%ld°", s_weather_now.temp_c);
+  }
   draw_value(ctx, lower);
   draw_separator(ctx, bbox, sep_on_bot);
 }
@@ -243,6 +253,14 @@ static void window_unload(Window* window) {
 
 static void tick_handler(struct tm* now, TimeUnits units_changed) {
   if (s_layer) { layer_mark_dirty(s_layer); }
+
+  if (now->tm_sec % 15 == 0) { // TODO slow it down
+    // send an empty message. that means "give me weather!"
+    DictionaryIterator *iter;
+    app_message_outbox_begin(&iter);
+    dict_write_uint8(iter, 0, 0);
+    app_message_outbox_send();
+  }
 }
 
 static void load_settings() {
@@ -266,6 +284,7 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, MESSAGE_KEY_color_separator        ))) { settings.color_separator          = GColorFromHEX(t->value->int32); }
   if ((t = dict_find(iter, MESSAGE_KEY_include_seconds        ))) { settings.include_seconds          = t->value->int8; }
   if ((t = dict_find(iter, MESSAGE_KEY_month_first            ))) { settings.month_first              = t->value->int8; }
+  if ((t = dict_find(iter, MESSAGE_KEY_weather_now_temp_c     ))) { s_weather_now.temp_c                = t->value->int32; }
   save_settings();
   // Update the display based on new settings
   layer_mark_dirty(window_get_root_layer(s_window));
@@ -277,6 +296,7 @@ static void init(void) {
   s_font_24 = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_24));
 
   load_settings();
+  s_weather_now.temp_c = 999; // TODO better sentinel value?
   app_message_register_inbox_received(inbox_received_handler);
   app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
 
