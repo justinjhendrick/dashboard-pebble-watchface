@@ -18,7 +18,11 @@
 - [x] Support 12hr and 24hr time
 - [x] Support hrs:mins:seconds
 - [x] Support hrs:mins
-- [ ] Temperature in Celcius or Fahrenheit
+- [x] Temperature in Celcius or Fahrenheit
 - [x] Support DD/MM and MM/DD for dates
 - [x] Show Step Count
-- [x] Custom fonts
+- [x] Roboto font for time
+- [ ] Choose a better name
+- [ ] More custom fonts (for date, temp, etc.)
+- [ ] Support for smaller screens
+- [ ] Support for round screens

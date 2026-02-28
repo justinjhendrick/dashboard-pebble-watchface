@@ -13,7 +13,7 @@ static GFont s_font_24 = NULL;
 #define SETTINGS_VERSION_KEY (1)
 #define SETTINGS_KEY (2)
 #define ROUND (PBL_IF_ROUND_ELSE(true, false))
-#define INVALID_TEMP (999)
+#define INVALID_TEMP (9999)
 
 typedef struct ClaySettings {
   GColor color_background;
@@ -24,6 +24,7 @@ typedef struct ClaySettings {
 
   bool include_seconds;
   bool month_first;
+  bool temperature_in_celsius;
   uint8_t reserved[40]; // for later growth
 } __attribute__((__packed__)) ClaySettings;
 
@@ -36,12 +37,13 @@ static void default_settings() {
   settings.color_corner_value = COLOR_FALLBACK(GColorChromeYellow,    GColorWhite);
   settings.color_separator    = COLOR_FALLBACK(GColorChromeYellow,    GColorWhite);
 
-  settings.include_seconds = true;
-  settings.month_first     = false;
+  settings.include_seconds        = true;
+  settings.month_first            = false;
+  settings.temperature_in_celsius = true;
 }
 
 typedef struct Weather {
-  int temp_c;
+  int temp_deci_c;
 } Weather;
 
 Weather s_weather_now;
@@ -189,10 +191,13 @@ static void draw_temp(GContext* ctx, GRect bbox, bool sep_on_bot) {
   hsplit_rect(ctx, bbox, &upper, &lower);
   snprintf(s_buffer, BUFFER_LEN, "%s", "Weather");
   draw_title(ctx, upper);
-  if (s_weather_now.temp_c == INVALID_TEMP) {
+  if (s_weather_now.temp_deci_c == INVALID_TEMP) {
     snprintf(s_buffer, BUFFER_LEN, "%s°", "--");
+  } else if (settings.temperature_in_celsius) {
+    snprintf(s_buffer, BUFFER_LEN, "%d.%d°c", s_weather_now.temp_deci_c / 10, s_weather_now.temp_deci_c % 10);
   } else {
-    snprintf(s_buffer, BUFFER_LEN, "%d°", s_weather_now.temp_c);
+    int temp_deci_f = s_weather_now.temp_deci_c * 9 / 5 + 320;
+    snprintf(s_buffer, BUFFER_LEN, "%d.%d°f", temp_deci_f / 10, temp_deci_f % 10);
   }
   draw_value(ctx, lower);
   draw_separator(ctx, bbox, sep_on_bot);
@@ -255,7 +260,7 @@ static void window_unload(Window* window) {
 static void tick_handler(struct tm* now, TimeUnits units_changed) {
   if (s_layer) { layer_mark_dirty(s_layer); }
 
-  if (now->tm_sec % 30 == 0) { // TODO slow it down
+  if (now->tm_min % 30 == 0 && now->tm_sec == 0) {
     // send an empty message. that means "give me weather!"
     DictionaryIterator *iter;
     app_message_outbox_begin(&iter);
@@ -278,14 +283,15 @@ static void save_settings() {
 
 static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   Tuple *t;
-  if ((t = dict_find(iter, MESSAGE_KEY_color_background       ))) { settings.color_background         = GColorFromHEX(t->value->int32); }
-  if ((t = dict_find(iter, MESSAGE_KEY_color_time_text        ))) { settings.color_time_text          = GColorFromHEX(t->value->int32); }
-  if ((t = dict_find(iter, MESSAGE_KEY_color_corner_title     ))) { settings.color_corner_title       = GColorFromHEX(t->value->int32); }
-  if ((t = dict_find(iter, MESSAGE_KEY_color_corner_value     ))) { settings.color_corner_value       = GColorFromHEX(t->value->int32); }
-  if ((t = dict_find(iter, MESSAGE_KEY_color_separator        ))) { settings.color_separator          = GColorFromHEX(t->value->int32); }
-  if ((t = dict_find(iter, MESSAGE_KEY_include_seconds        ))) { settings.include_seconds          = t->value->int8; }
-  if ((t = dict_find(iter, MESSAGE_KEY_month_first            ))) { settings.month_first              = t->value->int8; }
-  if ((t = dict_find(iter, MESSAGE_KEY_weather_now_temp_c     ))) { s_weather_now.temp_c              = t->value->int32; }
+  if ((t = dict_find(iter, MESSAGE_KEY_color_background             ))) { settings.color_background         = GColorFromHEX(t->value->int32); }
+  if ((t = dict_find(iter, MESSAGE_KEY_color_time_text              ))) { settings.color_time_text          = GColorFromHEX(t->value->int32); }
+  if ((t = dict_find(iter, MESSAGE_KEY_color_corner_title           ))) { settings.color_corner_title       = GColorFromHEX(t->value->int32); }
+  if ((t = dict_find(iter, MESSAGE_KEY_color_corner_value           ))) { settings.color_corner_value       = GColorFromHEX(t->value->int32); }
+  if ((t = dict_find(iter, MESSAGE_KEY_color_separator              ))) { settings.color_separator          = GColorFromHEX(t->value->int32); }
+  if ((t = dict_find(iter, MESSAGE_KEY_include_seconds              ))) { settings.include_seconds          = t->value->int8; }
+  if ((t = dict_find(iter, MESSAGE_KEY_month_first                  ))) { settings.month_first              = t->value->int8; }
+  if ((t = dict_find(iter, MESSAGE_KEY_temperature_in_celsius       ))) { settings.temperature_in_celsius   = t->value->int8; }
+  if ((t = dict_find(iter, MESSAGE_KEY_weather_now_temp_deci_c      ))) { s_weather_now.temp_deci_c         = t->value->int32; }
   save_settings();
   // Update the display based on new settings
   layer_mark_dirty(window_get_root_layer(s_window));
@@ -297,7 +303,7 @@ static void init(void) {
   s_font_24 = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_24));
 
   load_settings();
-  s_weather_now.temp_c = INVALID_TEMP;
+  s_weather_now.temp_deci_c = INVALID_TEMP;
   app_message_register_inbox_received(inbox_received_handler);
   app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
 

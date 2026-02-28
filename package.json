@@ -29,7 +29,8 @@
       "color_separator",
       "include_seconds",
       "month_first",
-      "weather_now_temp_c"
+      "temperature_in_celsius",
+      "weather_now_temp_deci_c"
     ],
     "resources": {
       "media": [
