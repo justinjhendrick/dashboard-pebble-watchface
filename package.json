@@ -1,17 +1,23 @@
 {
-  "name": "dashboard",
+  "name": "Tempilation",
   "author": "justinjhendrick, SocketMix",
   "version": "1.0.0",
   "keywords": [
     "pebble-watchface",
-    "digital"
+    "digital",
+    "galaxy",
+    "dashboard",
+    "configurable",
+    "temperature",
+    "battery",
+    "steps"
   ],
   "private": false,
   "dependencies": {
     "pebble-clay": "^1.0.4"
   },
   "pebble": {
-    "displayName": "Dashboard",
+    "displayName": "Tempilation",
     "uuid": "658a0530-fdbb-4573-a047-303111dee408",
     "sdkVersion": "3",
     "enableMultiJS": true,
