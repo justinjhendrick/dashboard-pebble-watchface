@@ -1,4 +1,7 @@
+#include <stdlib.h>
+
 #include <pebble.h>
+
 #include "utils.h"
 
 static Window* s_window = NULL;
@@ -8,12 +11,18 @@ static char s_buffer[BUFFER_LEN];
 static GFont s_font_48 = NULL;
 static GFont s_font_36 = NULL;
 static GFont s_font_24 = NULL;
+static TimeUnits s_time_units = SECOND_UNIT;
+static int s_num_remaining_awake_frames = -1;
 
 #define BBOX_DEBUG (false)
 #define SETTINGS_VERSION_KEY (1)
 #define SETTINGS_KEY (2)
 #define ROUND (PBL_IF_ROUND_ELSE(true, false))
 #define INVALID_TEMP (9999)
+
+#define SECONDS_NEVER (0)
+#define SECONDS_ALWAYS (1)
+#define SECONDS_ON_WAKE (2)
 
 typedef struct ClaySettings {
   GColor color_background;
@@ -22,24 +31,24 @@ typedef struct ClaySettings {
   GColor color_corner_value;
   GColor color_separator;
 
-  bool include_seconds;
+  uint8_t include_seconds;
   bool month_first;
   bool temperature_in_celsius;
   uint8_t reserved[40]; // for later growth
 } __attribute__((__packed__)) ClaySettings;
 
-ClaySettings settings;
+ClaySettings s_settings;
 
 static void default_settings() {
-  settings.color_background   = COLOR_FALLBACK(GColorOxfordBlue,      GColorBlack);
-  settings.color_time_text    = COLOR_FALLBACK(GColorChromeYellow,    GColorWhite);
-  settings.color_corner_title = COLOR_FALLBACK(GColorVividCerulean,   GColorWhite);
-  settings.color_corner_value = COLOR_FALLBACK(GColorChromeYellow,    GColorWhite);
-  settings.color_separator    = COLOR_FALLBACK(GColorChromeYellow,    GColorWhite);
+  s_settings.color_background   = COLOR_FALLBACK(GColorOxfordBlue,      GColorBlack);
+  s_settings.color_time_text    = COLOR_FALLBACK(GColorChromeYellow,    GColorWhite);
+  s_settings.color_corner_title = COLOR_FALLBACK(GColorVividCerulean,   GColorWhite);
+  s_settings.color_corner_value = COLOR_FALLBACK(GColorChromeYellow,    GColorWhite);
+  s_settings.color_separator    = COLOR_FALLBACK(GColorChromeYellow,    GColorWhite);
 
-  settings.include_seconds        = true;
-  settings.month_first            = false;
-  settings.temperature_in_celsius = true;
+  s_settings.include_seconds        = SECONDS_ALWAYS;
+  s_settings.month_first            = false;
+  s_settings.temperature_in_celsius = true;
 }
 
 typedef struct Weather {
@@ -71,8 +80,8 @@ static int draw_time(GContext* ctx, struct tm* now, GRect visible) {
     bbox = rect_from_center(center, GSize(visible.size.w, 48 * 5 / 4));
   }
   debug_bbox(ctx, bbox);
-  graphics_context_set_text_color(ctx, settings.color_time_text);
-  format_time(now, settings.include_seconds, s_buffer, BUFFER_LEN);
+  graphics_context_set_text_color(ctx, s_settings.color_time_text);
+  format_time(now, (s_time_units == SECOND_UNIT), s_buffer, BUFFER_LEN);
   graphics_draw_text(ctx, s_buffer, font, bbox, GTextOverflowModeFill, GTextAlignmentCenter, NULL);
   return bbox.size.h;
 }
@@ -118,18 +127,18 @@ static void vsplit_rect(GContext* ctx, GRect bbox, GRect* left, GRect* right, bo
 }
 
 static void draw_title(GContext* ctx, GRect bbox) {
-  graphics_context_set_text_color(ctx, settings.color_corner_title);
+  graphics_context_set_text_color(ctx, s_settings.color_corner_title);
   draw_text_midalign(ctx, s_buffer, bbox, GTextAlignmentCenter, false);
 }
 
 static void draw_value(GContext* ctx, GRect bbox) {
-  graphics_context_set_text_color(ctx, settings.color_corner_value);
+  graphics_context_set_text_color(ctx, s_settings.color_corner_value);
   draw_text_midalign(ctx, s_buffer, bbox, GTextAlignmentCenter, true);
 }
 
 static void draw_separator(GContext* ctx, GRect bbox, bool is_bot) {
   graphics_context_set_stroke_width(ctx, 1);
-  graphics_context_set_stroke_color(ctx, settings.color_separator);
+  graphics_context_set_stroke_color(ctx, s_settings.color_separator);
   int height = bbox.origin.y;
   if (is_bot) {
     height += bbox.size.h - 1;
@@ -149,7 +158,7 @@ static void draw_batt(GContext* ctx, GRect bbox, bool sep_on_bot) {
   snprintf(s_buffer, BUFFER_LEN, "%s", "Battery");
   draw_title(ctx, upper);
 
-  graphics_context_set_text_color(ctx, settings.color_corner_value);
+  graphics_context_set_text_color(ctx, s_settings.color_corner_value);
   BatteryChargeState bcs = battery_state_service_peek();
   snprintf(s_buffer, BUFFER_LEN, "%d", bcs.charge_percent);
   draw_text_midalign(ctx, s_buffer, left, GTextAlignmentRight, true);
@@ -167,8 +176,8 @@ static void draw_date(GContext* ctx, GRect bbox, bool sep_on_bot, struct tm* now
   snprintf(s_buffer, BUFFER_LEN, "%s", "Date");
   draw_title(ctx, upper);
 
-  graphics_context_set_text_color(ctx, settings.color_corner_value);
-  format_date(now, settings.month_first, s_buffer, BUFFER_LEN);
+  graphics_context_set_text_color(ctx, s_settings.color_corner_value);
+  format_date(now, s_settings.month_first, s_buffer, BUFFER_LEN);
   draw_text_midalign(ctx, s_buffer, left, GTextAlignmentRight, true);
   strftime(s_buffer, BUFFER_LEN, "%a", now);
   draw_text_midalign(ctx, s_buffer, right, GTextAlignmentCenter, false);
@@ -193,7 +202,7 @@ static void draw_temp(GContext* ctx, GRect bbox, bool sep_on_bot) {
   draw_title(ctx, upper);
   if (s_weather_now.temp_deci_c == INVALID_TEMP) {
     snprintf(s_buffer, BUFFER_LEN, "%s°", "--");
-  } else if (settings.temperature_in_celsius) {
+  } else if (s_settings.temperature_in_celsius) {
     snprintf(s_buffer, BUFFER_LEN, "%d.%d°c", s_weather_now.temp_deci_c / 10, s_weather_now.temp_deci_c % 10);
   } else {
     int temp_deci_f = s_weather_now.temp_deci_c * 9 / 5 + 320;
@@ -203,12 +212,50 @@ static void draw_temp(GContext* ctx, GRect bbox, bool sep_on_bot) {
   draw_separator(ctx, bbox, sep_on_bot);
 }
 
+static void tick_handler(struct tm* now, TimeUnits units_changed) {
+  if (s_layer) { layer_mark_dirty(s_layer); }
+
+  if (now->tm_min % 30 == 0 && now->tm_sec == 0) {
+    // send an empty message. that means "give me weather!"
+    DictionaryIterator *iter;
+    app_message_outbox_begin(&iter);
+    dict_write_uint8(iter, 0, 0);
+    app_message_outbox_send();
+  }
+}
+
+static void handle_accel_tap(AccelAxisType axis, int32_t direction) {
+  // TODO https://forum.repebble.com/t/show-seconds-only-when-backlight-is-active/565
+  if (s_settings.include_seconds == SECONDS_ON_WAKE) {
+    s_num_remaining_awake_frames = 10;  // 10 frames = 10 seconds because of the units we select
+    s_time_units = SECOND_UNIT;
+    tick_timer_service_subscribe(s_time_units, tick_handler);
+  }
+}
+
+static void tick_resub() {
+  if (s_settings.include_seconds == SECONDS_NEVER && s_time_units != MINUTE_UNIT) {
+    s_time_units = MINUTE_UNIT;
+    tick_timer_service_subscribe(s_time_units, tick_handler);
+  } else if (s_settings.include_seconds == SECONDS_ON_WAKE && s_num_remaining_awake_frames == 0) {
+    s_time_units = MINUTE_UNIT;
+    tick_timer_service_subscribe(s_time_units, tick_handler);
+  } else if (s_settings.include_seconds == SECONDS_ALWAYS && s_time_units != SECOND_UNIT) {
+    s_time_units = SECOND_UNIT;
+    tick_timer_service_subscribe(s_time_units, tick_handler);
+  }
+
+  if (s_num_remaining_awake_frames > -1) {
+    s_num_remaining_awake_frames--;
+  }
+}
+
 static void update_layer(Layer* layer, GContext* ctx) {
   time_t temp = time(NULL);
   struct tm* now = localtime(&temp);
 
   GRect bounds = layer_get_unobstructed_bounds(layer);
-  graphics_context_set_fill_color(ctx, settings.color_background);
+  graphics_context_set_fill_color(ctx, s_settings.color_background);
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
 
   GRect visible = bounds;
@@ -242,12 +289,14 @@ static void update_layer(Layer* layer, GContext* ctx) {
   draw_date(ctx,  rect_from_center(GPoint(right, top), complication_size), sep_bot, now);
   draw_steps(ctx, rect_from_center(GPoint(left,  bot), complication_size), sep_top);
   draw_temp(ctx,  rect_from_center(GPoint(right, bot), complication_size), sep_top);
+
+  tick_resub();
 }
 
 static void window_load(Window* window) {
   Layer* window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
-  window_set_background_color(s_window, settings.color_background);
+  window_set_background_color(s_window, s_settings.color_background);
   s_layer = layer_create(bounds);
   layer_set_update_proc(s_layer, update_layer);
   layer_add_child(window_layer, s_layer);
@@ -257,44 +306,39 @@ static void window_unload(Window* window) {
   if (s_layer) { layer_destroy(s_layer); }
 }
 
-static void tick_handler(struct tm* now, TimeUnits units_changed) {
-  if (s_layer) { layer_mark_dirty(s_layer); }
-
-  if (now->tm_min % 30 == 0 && now->tm_sec == 0) {
-    // send an empty message. that means "give me weather!"
-    DictionaryIterator *iter;
-    app_message_outbox_begin(&iter);
-    dict_write_uint8(iter, 0, 0);
-    app_message_outbox_send();
-  }
-}
-
 static void load_settings() {
   default_settings();
   // If we need a new version of settings, check SETTINGS_VERSION_KEY and migrate
-  persist_read_data(SETTINGS_KEY, &settings, sizeof(ClaySettings));
-  tick_timer_service_subscribe(settings.include_seconds ? SECOND_UNIT : MINUTE_UNIT, tick_handler);
+  persist_read_data(SETTINGS_KEY, &s_settings, sizeof(ClaySettings));
 }
 
 static void save_settings() {
   persist_write_int(SETTINGS_VERSION_KEY, 1);
-  persist_write_data(SETTINGS_KEY, &settings, sizeof(ClaySettings));
+  persist_write_data(SETTINGS_KEY, &s_settings, sizeof(ClaySettings));
 }
 
 static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   Tuple *t;
-  if ((t = dict_find(iter, MESSAGE_KEY_color_background             ))) { settings.color_background         = GColorFromHEX(t->value->int32); }
-  if ((t = dict_find(iter, MESSAGE_KEY_color_time_text              ))) { settings.color_time_text          = GColorFromHEX(t->value->int32); }
-  if ((t = dict_find(iter, MESSAGE_KEY_color_corner_title           ))) { settings.color_corner_title       = GColorFromHEX(t->value->int32); }
-  if ((t = dict_find(iter, MESSAGE_KEY_color_corner_value           ))) { settings.color_corner_value       = GColorFromHEX(t->value->int32); }
-  if ((t = dict_find(iter, MESSAGE_KEY_color_separator              ))) { settings.color_separator          = GColorFromHEX(t->value->int32); }
-  if ((t = dict_find(iter, MESSAGE_KEY_include_seconds              ))) { settings.include_seconds          = t->value->int8; }
-  if ((t = dict_find(iter, MESSAGE_KEY_month_first                  ))) { settings.month_first              = t->value->int8; }
-  if ((t = dict_find(iter, MESSAGE_KEY_temperature_in_celsius       ))) { settings.temperature_in_celsius   = t->value->int8; }
+  if ((t = dict_find(iter, MESSAGE_KEY_color_background             ))) { s_settings.color_background         = GColorFromHEX(t->value->int32); }
+  if ((t = dict_find(iter, MESSAGE_KEY_color_time_text              ))) { s_settings.color_time_text          = GColorFromHEX(t->value->int32); }
+  if ((t = dict_find(iter, MESSAGE_KEY_color_corner_title           ))) { s_settings.color_corner_title       = GColorFromHEX(t->value->int32); }
+  if ((t = dict_find(iter, MESSAGE_KEY_color_corner_value           ))) { s_settings.color_corner_value       = GColorFromHEX(t->value->int32); }
+  if ((t = dict_find(iter, MESSAGE_KEY_color_separator              ))) { s_settings.color_separator          = GColorFromHEX(t->value->int32); }
+  if ((t = dict_find(iter, MESSAGE_KEY_include_seconds              ))) { s_settings.include_seconds          = atoi(t->value->cstring); }
+  if ((t = dict_find(iter, MESSAGE_KEY_month_first                  ))) { s_settings.month_first              = t->value->int8; }
+  if ((t = dict_find(iter, MESSAGE_KEY_temperature_in_celsius       ))) { s_settings.temperature_in_celsius   = t->value->int8; }
   if ((t = dict_find(iter, MESSAGE_KEY_weather_now_temp_deci_c      ))) { s_weather_now.temp_deci_c         = t->value->int32; }
   save_settings();
   // Update the display based on new settings
   layer_mark_dirty(window_get_root_layer(s_window));
+  if (s_settings.include_seconds == SECONDS_ALWAYS) {
+    s_time_units = SECOND_UNIT;
+    tick_timer_service_subscribe(s_time_units, tick_handler);
+  } else {
+    s_time_units = MINUTE_UNIT;  // minutes until an event shortens it with a timer to return to minutes
+    tick_timer_service_subscribe(s_time_units, tick_handler);
+  }
+
 }
 
 static void init(void) {
@@ -302,6 +346,8 @@ static void init(void) {
   s_font_36 = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_36));
   s_font_24 = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_24));
 
+  tick_timer_service_subscribe(s_time_units, tick_handler);
+  accel_tap_service_subscribe(handle_accel_tap);
   load_settings();
   s_weather_now.temp_deci_c = INVALID_TEMP;
   app_message_register_inbox_received(inbox_received_handler);
@@ -316,6 +362,8 @@ static void init(void) {
 }
 
 static void deinit(void) {
+  accel_tap_service_unsubscribe();
+  tick_timer_service_unsubscribe();
   if (s_window) { window_destroy(s_window); }
   if (s_font_24) { fonts_unload_custom_font(s_font_24); }
   if (s_font_36) { fonts_unload_custom_font(s_font_36); }

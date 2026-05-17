@@ -15,7 +15,26 @@
     "type": "section",
     "items": [
       { "type": "heading", "defaultValue": "Behavior" },
-      { "type": "toggle",  "messageKey": "include_seconds",        "defaultValue": true,  "label": "include_seconds"},
+      {
+        "type": "select",
+        "messageKey": "include_seconds",
+        "defaultValue": "1",
+        "label": "include_seconds",
+        "options": [
+          {
+            "label": "Always",
+            "value": "1"
+          },
+          {
+            "label": "Never",
+            "value": "0"
+          },
+          {
+            "label": "On Wake",
+            "value": "2"
+          }
+        ]
+      },
       { "type": "toggle",  "messageKey": "month_first",            "defaultValue": false, "label": "month_first"},
       { "type": "toggle",  "messageKey": "temperature_in_celsius", "defaultValue": true,  "label": "temperature_in_celsius"}
     ]

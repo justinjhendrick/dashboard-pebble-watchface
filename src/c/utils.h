@@ -9,20 +9,6 @@ static GRect rect_from_center(GPoint center, GSize size) {
   return ret;
 }
 
-static int min(int a, int b) {
-  if (a < b) {
-    return a;
-  }
-  return b;
-}
-
-static int max(int a, int b) {
-  if (a > b) {
-    return a;
-  }
-  return b;
-}
-
 static void format_time(struct tm* now, bool include_seconds, char* buf, int buf_len) {
   if (clock_is_24h_style()) {
     if (include_seconds) {
@@ -102,16 +88,4 @@ static void draw_text_valign(GContext* ctx, const char* buffer, GRect bbox, GTex
 
 static void draw_text_midalign(GContext* ctx, const char* buffer, GRect bbox, GTextAlignment align, bool bold) {
   draw_text_valign(ctx, buffer, bbox, align, bold, 0);
-}
-
-static void draw_text_topalign(GContext* ctx, const char* buffer, GRect bbox, GTextAlignment align, bool bold) {
-  draw_text_valign(ctx, buffer, bbox, align, bold, 1);
-}
-
-static void draw_text_botalign(GContext* ctx, const char* buffer, GRect bbox, GTextAlignment align, bool bold) {
-  draw_text_valign(ctx, buffer, bbox, align, bold, 2);
-}
-
-static void draw_text_noalign(GContext* ctx, const char* buffer, GRect bbox, GTextAlignment align, bool bold) {
-  draw_text_valign(ctx, buffer, bbox, align, bold, 3);
 }

@@ -1,7 +1,7 @@
 {
   "name": "Tempilation",
   "author": "justinjhendrick, SocketMix",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "keywords": [
     "pebble-watchface",
     "digital",
@@ -14,7 +14,7 @@
   ],
   "private": false,
   "dependencies": {
-    "pebble-clay": "^1.0.4"
+    "@rebble/clay": "^1.0.8"
   },
   "pebble": {
     "displayName": "Tempilation",
