@@ -293,7 +293,7 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, MESSAGE_KEY_weather_now_temp_deci_c      ))) { s_weather_now.temp_deci_c           = t->value->int32; }
   save_settings();
   // Update the display based on new settings
-  layer_mark_dirty(window_get_root_layer(s_window));
+  if (s_layer) { layer_mark_dirty(s_layer); }
   if (s_settings.include_seconds == SECONDS_ALWAYS) {
     s_time_units = SECOND_UNIT;
     tick_timer_service_subscribe(s_time_units, tick_handler);
@@ -309,9 +309,9 @@ static void init(void) {
   s_font_md = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_34));
   s_font_sm = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_20));
 
+  load_settings();
   tick_timer_service_subscribe(s_time_units, tick_handler);
   accel_tap_service_subscribe(handle_accel_tap);
-  load_settings();
   s_weather_now.temp_deci_c = INVALID_TEMP;
   app_message_register_inbox_received(inbox_received_handler);
   app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
