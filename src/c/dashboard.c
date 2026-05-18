@@ -8,16 +8,16 @@ static Window* s_window = NULL;
 static Layer* s_layer = NULL;
 #define BUFFER_LEN (20)
 static char s_buffer[BUFFER_LEN];
-static GFont s_font_48 = NULL;
-static GFont s_font_36 = NULL;
-static GFont s_font_24 = NULL;
+static GFont s_font_xl = NULL;
+static GFont s_font_lg = NULL;
+static GFont s_font_md = NULL;
+static GFont s_font_sm = NULL;
 static TimeUnits s_time_units = SECOND_UNIT;
 static int s_num_remaining_awake_frames = -1;
 
 #define BBOX_DEBUG (false)
 #define SETTINGS_VERSION_KEY (1)
 #define SETTINGS_KEY (2)
-#define ROUND (PBL_IF_ROUND_ELSE(true, false))
 #define INVALID_TEMP (9999)
 
 #define SECONDS_NEVER (0)
@@ -60,7 +60,7 @@ Weather s_weather_now;
 static void debug_bbox(GContext* ctx, GRect bbox) {
   if (BBOX_DEBUG) {
     graphics_context_set_stroke_width(ctx, 1);
-    graphics_context_set_stroke_color(ctx, GColorBlack);
+    graphics_context_set_stroke_color(ctx, GColorWhite);
     graphics_draw_rect(ctx, bbox);
   }
 }
@@ -68,26 +68,24 @@ static void debug_bbox(GContext* ctx, GRect bbox) {
 static int draw_time(GContext* ctx, struct tm* now, GRect visible) {
   GPoint center = grect_center_point(&visible);
   GFont font;
-  GRect bbox;
-  if (!ROUND && visible.size.h < 160) {
-    font = s_font_24;
-    bbox = rect_from_center(center, GSize(visible.size.w, 24 * 5 / 4));
-  } else if (visible.size.h < 200) {
-    font = s_font_36;
-    bbox = rect_from_center(center, GSize(visible.size.w, 36 * 5 / 4));
+  GRect bbox = rect_from_center(center, GSize(visible.size.w, 48 * 5 / 4));
+  int shift_up = 0;
+  if (s_time_units == SECOND_UNIT) {
+    font = s_font_lg;
+    shift_up = 1;
   } else {
-    font = s_font_48;
-    bbox = rect_from_center(center, GSize(visible.size.w, 48 * 5 / 4));
+    font = s_font_xl;
+    shift_up = 7;
   }
   debug_bbox(ctx, bbox);
   graphics_context_set_text_color(ctx, s_settings.color_time_text);
   format_time(now, (s_time_units == SECOND_UNIT), s_buffer, BUFFER_LEN);
-  graphics_draw_text(ctx, s_buffer, font, bbox, GTextOverflowModeFill, GTextAlignmentCenter, NULL);
+  draw_text(ctx, s_buffer, font, bbox, GTextAlignmentCenter, shift_up);
   return bbox.size.h;
 }
 
 static void hsplit_rect(GContext* ctx, GRect bbox, GRect* upper, GRect* lower) {
-  int upper_h = bbox.size.h * 5 / 12;
+  int upper_h = bbox.size.h * 4 / 12;
   *upper = GRect(
     bbox.origin.x,
     bbox.origin.y,
@@ -104,36 +102,14 @@ static void hsplit_rect(GContext* ctx, GRect bbox, GRect* upper, GRect* lower) {
   debug_bbox(ctx, *lower);
 }
 
-static void vsplit_rect(GContext* ctx, GRect bbox, GRect* left, GRect* right, bool left_is_wider) {
-  int left_w = bbox.size.w * 3 / 5;
-  if (left_is_wider) {
-    left_w = bbox.size.w * 2 / 3;
-  }
-  int right_h = bbox.size.h / 2;
-  *left = GRect(
-    bbox.origin.x,
-    bbox.origin.y,
-    left_w,
-    bbox.size.h
-  );
-  *right = GRect(
-    bbox.origin.x + left_w,
-    bbox.origin.y + (bbox.size.h - right_h) / 2,
-    bbox.size.w - left_w,
-    right_h
-  );
-  debug_bbox(ctx, *left);
-  debug_bbox(ctx, *right);
-}
-
 static void draw_title(GContext* ctx, GRect bbox) {
   graphics_context_set_text_color(ctx, s_settings.color_corner_title);
-  draw_text_midalign(ctx, s_buffer, bbox, GTextAlignmentCenter, false);
+  draw_text(ctx, s_buffer, s_font_sm, bbox, GTextAlignmentCenter, 0);
 }
 
 static void draw_value(GContext* ctx, GRect bbox) {
   graphics_context_set_text_color(ctx, s_settings.color_corner_value);
-  draw_text_midalign(ctx, s_buffer, bbox, GTextAlignmentCenter, true);
+  draw_text(ctx, s_buffer, s_font_md, bbox, GTextAlignmentCenter, 0);
 }
 
 static void draw_separator(GContext* ctx, GRect bbox, bool is_bot) {
@@ -151,36 +127,29 @@ static void draw_separator(GContext* ctx, GRect bbox, bool is_bot) {
 }
 
 static void draw_batt(GContext* ctx, GRect bbox, bool sep_on_bot) {
-  GRect upper, lower, left, right;
+  GRect upper, lower;
   hsplit_rect(ctx, bbox, &upper, &lower);
-  vsplit_rect(ctx, lower, &left, &right, false);
 
   snprintf(s_buffer, BUFFER_LEN, "%s", "Battery");
   draw_title(ctx, upper);
 
   graphics_context_set_text_color(ctx, s_settings.color_corner_value);
   BatteryChargeState bcs = battery_state_service_peek();
-  snprintf(s_buffer, BUFFER_LEN, "%d", bcs.charge_percent);
-  draw_text_midalign(ctx, s_buffer, left, GTextAlignmentRight, true);
-  s_buffer[0] = '%';
-  s_buffer[1] = '\0';
-  draw_text_midalign(ctx, s_buffer, right, GTextAlignmentLeft, false);
+  snprintf(s_buffer, BUFFER_LEN, "%d%%", bcs.charge_percent);
+  draw_text(ctx, s_buffer, s_font_md, lower, GTextAlignmentCenter, 0);
   draw_separator(ctx, bbox, sep_on_bot);
 }
 
 static void draw_date(GContext* ctx, GRect bbox, bool sep_on_bot, struct tm* now) {
-  GRect upper, lower, left, right;
+  GRect upper, lower;
   hsplit_rect(ctx, bbox, &upper, &lower);
-  vsplit_rect(ctx, lower, &left, &right, true);
 
-  snprintf(s_buffer, BUFFER_LEN, "%s", "Date");
+  strftime(s_buffer, BUFFER_LEN, "%A", now);
   draw_title(ctx, upper);
 
   graphics_context_set_text_color(ctx, s_settings.color_corner_value);
   format_date(now, s_settings.month_first, s_buffer, BUFFER_LEN);
-  draw_text_midalign(ctx, s_buffer, left, GTextAlignmentRight, true);
-  strftime(s_buffer, BUFFER_LEN, "%a", now);
-  draw_text_midalign(ctx, s_buffer, right, GTextAlignmentCenter, false);
+  draw_text(ctx, s_buffer, s_font_md, lower, GTextAlignmentCenter, 0);
   draw_separator(ctx, bbox, sep_on_bot);
 }
 
@@ -254,41 +223,31 @@ static void update_layer(Layer* layer, GContext* ctx) {
   time_t temp = time(NULL);
   struct tm* now = localtime(&temp);
 
-  GRect bounds = layer_get_unobstructed_bounds(layer);
-  graphics_context_set_fill_color(ctx, s_settings.color_background);
-  graphics_fill_rect(ctx, bounds, 0, GCornerNone);
+  GRect bounds = layer_get_bounds(layer);
+  GRect visible = layer_get_unobstructed_bounds(layer);
+  bool timeline_quick_view = visible.size.h < bounds.size.h - 1;
 
-  GRect visible = bounds;
-  if (ROUND) {
-    int w = bounds.size.w;
-    int h = bounds.size.h;
-    visible = GRect(
-      bounds.origin.x + w / 10,
-      bounds.origin.y + h / 10,
-      w * 8 / 10,
-      h * 8 / 10
-    );
-  }
+  //graphics_context_set_fill_color(ctx, s_settings.color_background);
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_fill_rect(ctx, visible, 0, GCornerNone);
 
   int time_bbox_height = draw_time(ctx, now, visible);
 
-  int complication_avail_height = (visible.size.h - time_bbox_height) / 2;
-  int complication_height = complication_avail_height * 3 / 4;
-  if (!ROUND && visible.size.h < 160) {
-    complication_height = complication_avail_height;
-  }
+  int complication_height = (visible.size.h - time_bbox_height) / 2 - 10;
   GSize complication_size = GSize(visible.size.w / 2, complication_height);
-  int left  = visible.origin.x + visible.size.w / 4;
-  int right = visible.origin.x + visible.size.w * 3 / 4;
-  int top = visible.origin.y                  + complication_avail_height / 2;
-  int bot = visible.origin.y + visible.size.h - complication_avail_height / 2;
-  bool sep_bot = true;
-  bool sep_top = false;
+  if (!timeline_quick_view) {
+    int left  = visible.origin.x + visible.size.w / 4;
+    int right = visible.origin.x + visible.size.w * 3 / 4;
+    int top = visible.origin.y                  + complication_height / 2;
+    int bot = visible.origin.y + visible.size.h - complication_height / 2;
+    bool sep_on_bot = true;
+    bool sep_on_top = false;
 
-  draw_batt(ctx,  rect_from_center(GPoint(left,  top), complication_size), sep_bot);
-  draw_date(ctx,  rect_from_center(GPoint(right, top), complication_size), sep_bot, now);
-  draw_steps(ctx, rect_from_center(GPoint(left,  bot), complication_size), sep_top);
-  draw_temp(ctx,  rect_from_center(GPoint(right, bot), complication_size), sep_top);
+    draw_batt(ctx,  rect_from_center(GPoint(left,  top), complication_size), sep_on_bot);
+    draw_date(ctx,  rect_from_center(GPoint(right, top), complication_size), sep_on_bot, now);
+    draw_steps(ctx, rect_from_center(GPoint(left,  bot), complication_size), sep_on_top);
+    draw_temp(ctx,  rect_from_center(GPoint(right, bot), complication_size), sep_on_top);
+  }
 
   tick_resub();
 }
@@ -342,9 +301,10 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
 }
 
 static void init(void) {
-  s_font_48 = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_48));
-  s_font_36 = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_36));
-  s_font_24 = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_24));
+  s_font_xl = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_58));
+  s_font_lg = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_50));
+  s_font_md = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_34));
+  s_font_sm = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_20));
 
   tick_timer_service_subscribe(s_time_units, tick_handler);
   accel_tap_service_subscribe(handle_accel_tap);
@@ -365,9 +325,10 @@ static void deinit(void) {
   accel_tap_service_unsubscribe();
   tick_timer_service_unsubscribe();
   if (s_window) { window_destroy(s_window); }
-  if (s_font_24) { fonts_unload_custom_font(s_font_24); }
-  if (s_font_36) { fonts_unload_custom_font(s_font_36); }
-  if (s_font_48) { fonts_unload_custom_font(s_font_48); }
+  if (s_font_xl) { fonts_unload_custom_font(s_font_xl); }
+  if (s_font_lg) { fonts_unload_custom_font(s_font_lg); }
+  if (s_font_md) { fonts_unload_custom_font(s_font_md); }
+  if (s_font_sm) { fonts_unload_custom_font(s_font_sm); }
 }
 
 int main(void) {
