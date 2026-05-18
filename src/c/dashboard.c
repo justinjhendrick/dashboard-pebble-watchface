@@ -75,7 +75,7 @@ static int draw_time(GContext* ctx, struct tm* now, GRect visible) {
     shift_up = 1;
   } else {
     font = s_font_xl;
-    shift_up = 7;
+    shift_up = 14;
   }
   debug_bbox(ctx, bbox);
   graphics_context_set_text_color(ctx, s_settings.color_time_text);
@@ -84,8 +84,13 @@ static int draw_time(GContext* ctx, struct tm* now, GRect visible) {
   return bbox.size.h;
 }
 
-static void hsplit_rect(GContext* ctx, GRect bbox, GRect* upper, GRect* lower) {
-  int upper_h = bbox.size.h * 4 / 12;
+static void hsplit_rect(GContext* ctx, GRect bbox, GRect* upper, GRect* lower, bool big_on_bot) {
+  int upper_h;
+  if (big_on_bot) {
+    upper_h = bbox.size.h * 5 / 12;
+  } else {
+    upper_h = bbox.size.h * 7 / 12;
+  }
   *upper = GRect(
     bbox.origin.x,
     bbox.origin.y,
@@ -113,7 +118,7 @@ static void draw_value(GContext* ctx, GRect bbox) {
 }
 
 static void draw_separator(GContext* ctx, GRect bbox, bool is_bot) {
-  graphics_context_set_stroke_width(ctx, 1);
+  graphics_context_set_stroke_width(ctx, 3);
   graphics_context_set_stroke_color(ctx, s_settings.color_separator);
   int height = bbox.origin.y;
   if (is_bot) {
@@ -128,7 +133,7 @@ static void draw_separator(GContext* ctx, GRect bbox, bool is_bot) {
 
 static void draw_batt(GContext* ctx, GRect bbox, bool sep_on_bot) {
   GRect upper, lower;
-  hsplit_rect(ctx, bbox, &upper, &lower);
+  hsplit_rect(ctx, bbox, &upper, &lower, true);
 
   snprintf(s_buffer, BUFFER_LEN, "%s", "Battery");
   draw_title(ctx, upper);
@@ -142,7 +147,7 @@ static void draw_batt(GContext* ctx, GRect bbox, bool sep_on_bot) {
 
 static void draw_date(GContext* ctx, GRect bbox, bool sep_on_bot, struct tm* now) {
   GRect upper, lower;
-  hsplit_rect(ctx, bbox, &upper, &lower);
+  hsplit_rect(ctx, bbox, &upper, &lower, true);
 
   strftime(s_buffer, BUFFER_LEN, "%A", now);
   draw_title(ctx, upper);
@@ -155,20 +160,20 @@ static void draw_date(GContext* ctx, GRect bbox, bool sep_on_bot, struct tm* now
 
 static void draw_steps(GContext* ctx, GRect bbox, bool sep_on_bot) {
   GRect upper, lower;
-  hsplit_rect(ctx, bbox, &upper, &lower);
+  hsplit_rect(ctx, bbox, &upper, &lower, false);
   snprintf(s_buffer, BUFFER_LEN, "%s", "Steps");
-  draw_title(ctx, upper);
+  draw_title(ctx, lower);
   int steps = health_service_sum_today(HealthMetricStepCount);
   snprintf(s_buffer, BUFFER_LEN, "%d", steps);
-  draw_value(ctx, lower);
+  draw_value(ctx, upper);
   draw_separator(ctx, bbox, sep_on_bot);
 }
 
 static void draw_temp(GContext* ctx, GRect bbox, bool sep_on_bot) {
   GRect upper, lower;
-  hsplit_rect(ctx, bbox, &upper, &lower);
+  hsplit_rect(ctx, bbox, &upper, &lower, false);
   snprintf(s_buffer, BUFFER_LEN, "%s", "Weather");
-  draw_title(ctx, upper);
+  draw_title(ctx, lower);
   if (s_weather_now.temp_deci_c == INVALID_TEMP) {
     snprintf(s_buffer, BUFFER_LEN, "%s°", "--");
   } else if (s_settings.temperature_in_celsius) {
@@ -177,7 +182,7 @@ static void draw_temp(GContext* ctx, GRect bbox, bool sep_on_bot) {
     int temp_deci_f = s_weather_now.temp_deci_c * 9 / 5 + 320;
     snprintf(s_buffer, BUFFER_LEN, "%d.%d°f", temp_deci_f / 10, temp_deci_f % 10);
   }
-  draw_value(ctx, lower);
+  draw_value(ctx, upper);
   draw_separator(ctx, bbox, sep_on_bot);
 }
 
@@ -227,26 +232,25 @@ static void update_layer(Layer* layer, GContext* ctx) {
   GRect visible = layer_get_unobstructed_bounds(layer);
   bool timeline_quick_view = visible.size.h < bounds.size.h - 1;
 
-  //graphics_context_set_fill_color(ctx, s_settings.color_background);
-  graphics_context_set_fill_color(ctx, GColorBlack);
-  graphics_fill_rect(ctx, visible, 0, GCornerNone);
+  graphics_context_set_fill_color(ctx, s_settings.color_background);
+  graphics_fill_rect(ctx, bounds, 0, GCornerNone);
 
-  int time_bbox_height = draw_time(ctx, now, visible);
+  int time_bbox_height = draw_time(ctx, now, bounds);
 
-  int complication_height = (visible.size.h - time_bbox_height) / 2 - 10;
-  GSize complication_size = GSize(visible.size.w / 2, complication_height);
+  int complication_height = (bounds.size.h - time_bbox_height) / 2 - 10;
+  GSize complication_size = GSize(bounds.size.w / 2, complication_height);
+  int left  = bounds.origin.x + bounds.size.w / 4;
+  int right = bounds.origin.x + bounds.size.w * 3 / 4;
+  int top = bounds.origin.y                  + complication_height / 2;
+  int bot = bounds.origin.y + bounds.size.h - complication_height / 2;
+  bool sep_on_bot = true;
+  bool sep_on_top = false;
+
+  draw_batt(ctx, rect_from_center(GPoint(left,  top), complication_size), sep_on_bot);
+  draw_date(ctx, rect_from_center(GPoint(right, top), complication_size), sep_on_bot, now);
   if (!timeline_quick_view) {
-    int left  = visible.origin.x + visible.size.w / 4;
-    int right = visible.origin.x + visible.size.w * 3 / 4;
-    int top = visible.origin.y                  + complication_height / 2;
-    int bot = visible.origin.y + visible.size.h - complication_height / 2;
-    bool sep_on_bot = true;
-    bool sep_on_top = false;
-
-    draw_batt(ctx,  rect_from_center(GPoint(left,  top), complication_size), sep_on_bot);
-    draw_date(ctx,  rect_from_center(GPoint(right, top), complication_size), sep_on_bot, now);
     draw_steps(ctx, rect_from_center(GPoint(left,  bot), complication_size), sep_on_top);
-    draw_temp(ctx,  rect_from_center(GPoint(right, bot), complication_size), sep_on_top);
+    draw_temp(ctx, rect_from_center(GPoint(right, bot), complication_size), sep_on_top);
   }
 
   tick_resub();
@@ -267,7 +271,7 @@ static void window_unload(Window* window) {
 
 static void load_settings() {
   default_settings();
-  // If we need a new version of settings, check SETTINGS_VERSION_KEY and migrate
+  // If we need a backwards incompatible version of settings, check SETTINGS_VERSION_KEY and migrate
   persist_read_data(SETTINGS_KEY, &s_settings, sizeof(ClaySettings));
 }
 
@@ -286,7 +290,7 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, MESSAGE_KEY_include_seconds              ))) { s_settings.include_seconds          = atoi(t->value->cstring); }
   if ((t = dict_find(iter, MESSAGE_KEY_month_first                  ))) { s_settings.month_first              = t->value->int8; }
   if ((t = dict_find(iter, MESSAGE_KEY_temperature_in_celsius       ))) { s_settings.temperature_in_celsius   = t->value->int8; }
-  if ((t = dict_find(iter, MESSAGE_KEY_weather_now_temp_deci_c      ))) { s_weather_now.temp_deci_c         = t->value->int32; }
+  if ((t = dict_find(iter, MESSAGE_KEY_weather_now_temp_deci_c      ))) { s_weather_now.temp_deci_c           = t->value->int32; }
   save_settings();
   // Update the display based on new settings
   layer_mark_dirty(window_get_root_layer(s_window));
@@ -297,11 +301,10 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
     s_time_units = MINUTE_UNIT;  // minutes until an event shortens it with a timer to return to minutes
     tick_timer_service_subscribe(s_time_units, tick_handler);
   }
-
 }
 
 static void init(void) {
-  s_font_xl = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_58));
+  s_font_xl = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_68));
   s_font_lg = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_50));
   s_font_md = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_34));
   s_font_sm = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_20));

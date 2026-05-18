@@ -40,10 +40,10 @@
     ],
     "resources": {
       "media": [
-        {"name": "ROBOTO_58", "file": "fonts/Roboto-Regular.ttf", "characterRegex": "[0-9:]", "type": "font"},
-        {"name": "ROBOTO_50", "file": "fonts/Roboto-Regular.ttf", "characterRegex": "[0-9:]", "type": "font"},
-        {"name": "ROBOTO_34", "file": "fonts/Roboto-Regular.ttf", "characterRegex": "[a-zA-Z0-9:%\\.\\-°/]", "type": "font"},
-        {"name": "ROBOTO_20", "file": "fonts/Roboto-Regular.ttf", "characterRegex": "[a-zA-Z0-9:%\\.\\-°/]", "type": "font"}
+        {"name": "ROBOTO_68", "file": "fonts/Roboto-Regular.ttf", "characterRegex": "[0-9:\\.]", "type": "font"},
+        {"name": "ROBOTO_50", "file": "fonts/Roboto-Regular.ttf", "characterRegex": "[0-9:\\.]", "type": "font"},
+        {"name": "ROBOTO_34", "file": "fonts/Roboto-Regular.ttf", "characterRegex": "[fc0-9:%\\.\\-°/]", "type": "font"},
+        {"name": "ROBOTO_20", "file": "fonts/Roboto-Regular.ttf", "characterRegex": "[a-zA-Z\\.]", "type": "font"}
       ]
     }
   }
