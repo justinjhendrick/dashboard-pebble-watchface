@@ -14,6 +14,10 @@ static GFont s_font_md = NULL;
 static GFont s_font_sm = NULL;
 static TimeUnits s_time_units = SECOND_UNIT;
 static int s_num_remaining_awake_frames = -1;
+static time_t s_last_request_sent = 0;
+#define INIT_WEATHER_RETRY_SECONDS (5)
+#define MAX_WEATHER_RETRY_SECONDS (60 * 60)
+static int s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
 
 #define BBOX_DEBUG (false)
 #define SETTINGS_VERSION_KEY (1)
@@ -186,16 +190,37 @@ static void draw_temp(GContext* ctx, GRect bbox, bool sep_on_bot) {
   draw_separator(ctx, bbox, sep_on_bot);
 }
 
-static void tick_handler(struct tm* now, TimeUnits units_changed) {
-  if (s_layer) { layer_mark_dirty(s_layer); }
+static void maybe_request_weather() {
+  time_t now = time(NULL);
+  bool should_request = false;
+  if (s_weather_now.temp_deci_c == INVALID_TEMP && now >= s_last_request_sent + s_weather_retry_seconds) {
+    // Retry multiple times while temp is invalid
+    should_request = true;
 
-  if (now->tm_min % 30 == 0 && now->tm_sec == 0) {
+    // Exponential backoff. Conserve battery in case GPS is disabled.
+    s_weather_retry_seconds *= 2;
+    if (s_weather_retry_seconds >= MAX_WEATHER_RETRY_SECONDS) {
+      s_weather_retry_seconds = MAX_WEATHER_RETRY_SECONDS;
+    }
+  }
+  if (now >= s_last_request_sent + 30 * 60) {
+    // Get fresh data on a regular cadence
+    should_request = true;
+  }
+
+  if (should_request) {
     // send an empty message. that means "give me weather!"
     DictionaryIterator *iter;
     app_message_outbox_begin(&iter);
     dict_write_uint8(iter, 0, 0);
     app_message_outbox_send();
+    s_last_request_sent = now;
   }
+}
+
+static void tick_handler(struct tm* now, TimeUnits units_changed) {
+  if (s_layer) { layer_mark_dirty(s_layer); }
+  maybe_request_weather();
 }
 
 static void handle_accel_tap(AccelAxisType axis, int32_t direction) {
@@ -290,7 +315,12 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, MESSAGE_KEY_include_seconds              ))) { s_settings.include_seconds          = atoi(t->value->cstring); }
   if ((t = dict_find(iter, MESSAGE_KEY_month_first                  ))) { s_settings.month_first              = t->value->int8; }
   if ((t = dict_find(iter, MESSAGE_KEY_temperature_in_celsius       ))) { s_settings.temperature_in_celsius   = t->value->int8; }
-  if ((t = dict_find(iter, MESSAGE_KEY_weather_now_temp_deci_c      ))) { s_weather_now.temp_deci_c           = t->value->int32; }
+
+  if ((t = dict_find(iter, MESSAGE_KEY_weather_now_temp_deci_c))) {
+    s_weather_now.temp_deci_c = t->value->int32;
+    s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
+  }
+
   save_settings();
   // Update the display based on new settings
   if (s_layer) { layer_mark_dirty(s_layer); }
@@ -313,8 +343,9 @@ static void init(void) {
   tick_timer_service_subscribe(s_time_units, tick_handler);
   accel_tap_service_subscribe(handle_accel_tap);
   s_weather_now.temp_deci_c = INVALID_TEMP;
+  s_last_request_sent = time(NULL);  // because js sends weather on "ready" event
   app_message_register_inbox_received(inbox_received_handler);
-  app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
+  app_message_open(1024, 64);
 
   s_window = window_create();
   window_set_window_handlers(s_window, (WindowHandlers) {
