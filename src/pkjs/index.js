@@ -27,45 +27,54 @@ function getRequest(url, onload, onerror) {
 }
 
 var INVALID_TEMP = 9999; // must match watch side definition
-var cache = {
+var weather_cache = {
   time: 0,
   temp_deci_c: INVALID_TEMP,
+}
+var location_cache = {
   lat: null,
   lon: null,
 }
 
 function handleUnknownWeather(e) {
-  console.log("Something went wrong with weather API. " + e);
+  console.log("Something went wrong with weather API. " + JSON.stringify(e));
 }
 
 function getWeather() {
-  var cache_str = localStorage.getItem("weather_cache")
-  if (cache_str != null) {
-    cache = JSON.parse(cache_str);
+  var weather_cache_str = localStorage.getItem("weather_cache_v2")
+  if (weather_cache_str != null) {
+    weather_cache = JSON.parse(weather_cache_str);
   }
 
-  if (cache.lat == null || cache.lon == null) {
-    console.log("can't get weather from unknown location");
-    return;
-  }
   if (
-    Date.now() <= cache.time + millis_from_mins(20)
-    && cache.temp_deci_c != INVALID_TEMP
+    Date.now() <= weather_cache.time + millis_from_mins(20)
+    && weather_cache.temp_deci_c != INVALID_TEMP
   ) {
-    console.log("reusing cached weather from " + cache.time);
+    console.log("reusing cached weather from " + weather_cache.time);
     Pebble.sendAppMessage(
-      {weather_now_temp_deci_c: cache.temp_deci_c},
+      {weather_now_temp_deci_c: weather_cache.temp_deci_c},
       function() {},
       function(e) { console.log("Error sending weather to Pebble: " + e.error.message); }
     );
     return;
   }
 
-  // cached value is too old or invalid. attempt to update.
+  if (location_cache.lat == null || location_cache.lon == null) {
+    var location_cache_str = localStorage.getItem("location_cache_v2")
+    if (location_cache_str != null) {
+      location_cache = JSON.parse(location_cache_str);
+    }
+  }
+  if (location_cache.lat == null || location_cache.lon == null) {
+    console.log("cannot get weather if we don't know where");
+    return;
+  }
+
+  // weather_cached value is too old or invalid. attempt to update.
   var url =
     "https://api.met.no/weatherapi/locationforecast/2.0/compact"
-    + "?lat=" + cache.lat
-    + "&lon=" + cache.lon;
+    + "?lat=" + location_cache.lat
+    + "&lon=" + location_cache.lon;
   console.log("Fetching weather from " + url);
   getRequest(url, function(response) {
     if (response.status != 200) {
@@ -76,9 +85,9 @@ function getWeather() {
     var temperature_celsius = json.properties.timeseries[0].data.instant.details.air_temperature;
     var temp_deci_c = Math.round(temperature_celsius * 10);
     console.log("Got Temp " + temperature_celsius + "C from remote server");
-    cache.time = Date.now();
-    cache.temp_deci_c = temp_deci_c;
-    localStorage.setItem("weather_cache", JSON.stringify(cache))
+    weather_cache.time = Date.now();
+    weather_cache.temp_deci_c = temp_deci_c;
+    localStorage.setItem("weather_cache_v2", JSON.stringify(weather_cache))
     Pebble.sendAppMessage(
       {weather_now_temp_deci_c: temp_deci_c},
       function() {},
@@ -88,9 +97,9 @@ function getWeather() {
 }
 
 function locationSuccess(pos) {
-  console.log("locationSuccess");
-  cache.lat = pos.coords.latitude.toFixed(1)
-  cache.lon = pos.coords.longitude.toFixed(1)
+  location_cache.lat = pos.coords.latitude.toFixed(1)
+  location_cache.lon = pos.coords.longitude.toFixed(1)
+  localStorage.setItem("location_cache_v2", JSON.stringify(location_cache))
   getWeather();
 }
 
