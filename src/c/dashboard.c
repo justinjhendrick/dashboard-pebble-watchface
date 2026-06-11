@@ -157,7 +157,7 @@ static void draw_date(GContext* ctx, GRect bbox, bool sep_on_bot, struct tm* now
   GRect upper, lower;
   hsplit_rect(ctx, bbox, &upper, &lower, true);
 
-  strftime(s_buffer, BUFFER_LEN, "%A", now);
+  strftime(s_buffer, BUFFER_LEN, "%a", now);
   draw_title(ctx, upper);
 
   graphics_context_set_text_color(ctx, s_settings.color_corner_value);
