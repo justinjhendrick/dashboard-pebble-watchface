@@ -1,4 +1,4 @@
-# Dashboard Pebble Watchface
+# Tempilation Pebble Watchface
 
 https://apps.repebble.com/cfcf110c62e6483eba7ef85a
 
@@ -7,6 +7,8 @@ https://apps.repebble.com/cfcf110c62e6483eba7ef85a
 ### Emery
 
 ![screenshot](screenshot_emery.png)
+
+![screenshot](screenshot_emery2.png)
 
 ## Credits
 
@@ -24,7 +26,7 @@ https://apps.repebble.com/cfcf110c62e6483eba7ef85a
 - [x] Support DD/MM and MM/DD for dates
 - [x] Show Step Count
 - [x] Roboto font for time
-- [ ] Choose a better name
+- [x] Choose a better name
 - [ ] More custom fonts (for date, temp, etc.)
 - [ ] Support for smaller screens
 - [ ] Support for round screens

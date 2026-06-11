@@ -169,10 +169,16 @@ static void draw_date(GContext* ctx, GRect bbox, bool sep_on_bot, struct tm* now
 static void draw_steps(GContext* ctx, GRect bbox, bool sep_on_bot) {
   GRect upper, lower;
   hsplit_rect(ctx, bbox, &upper, &lower, false);
-  snprintf(s_buffer, BUFFER_LEN, "%s", "Steps");
-  draw_title(ctx, lower);
   int steps = health_service_sum_today(HealthMetricStepCount);
-  snprintf(s_buffer, BUFFER_LEN, "%d", steps);
+  if (steps >= 10000) {
+    snprintf(s_buffer, BUFFER_LEN, "%s", "kSteps");
+    draw_title(ctx, lower);
+    snprintf(s_buffer, BUFFER_LEN, "%d.%d", steps / 1000, (steps % 1000) / 100);
+  } else {
+    snprintf(s_buffer, BUFFER_LEN, "%s", "Steps");
+    draw_title(ctx, lower);
+    snprintf(s_buffer, BUFFER_LEN, "%d", steps);
+  }
   draw_value(ctx, upper);
   draw_separator(ctx, bbox, sep_on_bot);
 }
