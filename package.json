@@ -36,6 +36,7 @@
       "include_seconds",
       "month_first",
       "temperature_in_celsius",
+      "temperature_tenths",
       "weather_now_temp_deci_c"
     ],
     "resources": {

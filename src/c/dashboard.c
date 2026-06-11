@@ -28,6 +28,8 @@ static int s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
 #define SECONDS_ALWAYS (1)
 #define SECONDS_ON_WAKE (2)
 
+#define DEFAULT_TEMPERATURE_TENTHS (true)
+
 typedef struct ClaySettings {
   GColor color_background;
   GColor color_time_text;
@@ -38,7 +40,8 @@ typedef struct ClaySettings {
   uint8_t include_seconds;
   bool month_first;
   bool temperature_in_celsius;
-  uint8_t reserved[40]; // for later growth
+  bool temperature_tenths;
+  uint8_t reserved[39]; // for later growth
 } __attribute__((__packed__)) ClaySettings;
 
 ClaySettings s_settings;
@@ -53,6 +56,7 @@ static void default_settings() {
   s_settings.include_seconds        = SECONDS_ALWAYS;
   s_settings.month_first            = false;
   s_settings.temperature_in_celsius = true;
+  s_settings.temperature_tenths     = DEFAULT_TEMPERATURE_TENTHS;
 }
 
 typedef struct Weather {
@@ -181,10 +185,18 @@ static void draw_temp(GContext* ctx, GRect bbox, bool sep_on_bot) {
   if (s_weather_now.temp_deci_c == INVALID_TEMP) {
     snprintf(s_buffer, BUFFER_LEN, "%s°", "--");
   } else if (s_settings.temperature_in_celsius) {
-    snprintf(s_buffer, BUFFER_LEN, "%d.%d°c", s_weather_now.temp_deci_c / 10, s_weather_now.temp_deci_c % 10);
+    if (s_settings.temperature_tenths) {
+      snprintf(s_buffer, BUFFER_LEN, "%d.%d°c", s_weather_now.temp_deci_c / 10, s_weather_now.temp_deci_c % 10);
+    } else {
+      snprintf(s_buffer, BUFFER_LEN, "%d°c", (s_weather_now.temp_deci_c + 5) / 10);
+    }
   } else {
     int temp_deci_f = s_weather_now.temp_deci_c * 9 / 5 + 320;
-    snprintf(s_buffer, BUFFER_LEN, "%d.%d°f", temp_deci_f / 10, temp_deci_f % 10);
+    if (s_settings.temperature_tenths) {
+      snprintf(s_buffer, BUFFER_LEN, "%d.%d°f", temp_deci_f / 10, temp_deci_f % 10);
+    } else {
+      snprintf(s_buffer, BUFFER_LEN, "%d°f", (temp_deci_f + 5) / 10);
+    }
   }
   draw_value(ctx, upper);
   draw_separator(ctx, bbox, sep_on_bot);
@@ -296,12 +308,19 @@ static void window_unload(Window* window) {
 
 static void load_settings() {
   default_settings();
-  // If we need a backwards incompatible version of settings, check SETTINGS_VERSION_KEY and migrate
+
+  int32_t loaded_version = persist_read_int(SETTINGS_VERSION_KEY);
   persist_read_data(SETTINGS_KEY, &s_settings, sizeof(ClaySettings));
+
+  // Check for older versions of settings and migrate them
+  if (loaded_version == 1) {
+    // temperature_tenths was in an undefined array before
+    s_settings.temperature_tenths = DEFAULT_TEMPERATURE_TENTHS;
+  }
 }
 
 static void save_settings() {
-  persist_write_int(SETTINGS_VERSION_KEY, 1);
+  persist_write_int(SETTINGS_VERSION_KEY, 2);
   persist_write_data(SETTINGS_KEY, &s_settings, sizeof(ClaySettings));
 }
 
@@ -315,6 +334,7 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, MESSAGE_KEY_include_seconds              ))) { s_settings.include_seconds          = atoi(t->value->cstring); }
   if ((t = dict_find(iter, MESSAGE_KEY_month_first                  ))) { s_settings.month_first              = t->value->int8; }
   if ((t = dict_find(iter, MESSAGE_KEY_temperature_in_celsius       ))) { s_settings.temperature_in_celsius   = t->value->int8; }
+  if ((t = dict_find(iter, MESSAGE_KEY_temperature_tenths           ))) { s_settings.temperature_tenths       = t->value->int8; }
 
   if ((t = dict_find(iter, MESSAGE_KEY_weather_now_temp_deci_c))) {
     s_weather_now.temp_deci_c = t->value->int32;

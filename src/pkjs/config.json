@@ -36,7 +36,8 @@
         ]
       },
       { "type": "toggle",  "messageKey": "month_first",            "defaultValue": false, "label": "month_first"},
-      { "type": "toggle",  "messageKey": "temperature_in_celsius", "defaultValue": true,  "label": "temperature_in_celsius"}
+      { "type": "toggle",  "messageKey": "temperature_in_celsius", "defaultValue": true,  "label": "temperature_in_celsius"},
+      { "type": "toggle",  "messageKey": "temperature_tenths",     "defaultValue": true,  "label": "temperature_tenths"}
     ]
   },
   {
