@@ -19,7 +19,9 @@ static time_t s_last_request_sent = 0;
 #define MAX_WEATHER_RETRY_SECONDS (60 * 60)
 static int s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
 
-#define BBOX_DEBUG (false)
+#define DEBUG_BBOX (false)
+#define DEBUG_TIME (false)
+
 #define SETTINGS_VERSION_KEY (1)
 #define SETTINGS_KEY (2)
 #define INVALID_TEMP (9999)
@@ -29,6 +31,7 @@ static int s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
 #define SECONDS_ON_WAKE (2)
 
 #define DEFAULT_TEMPERATURE_TENTHS (true)
+#define SETTINGS_RESERVED_BYTES (39)
 
 typedef struct ClaySettings {
   GColor color_background;
@@ -41,7 +44,7 @@ typedef struct ClaySettings {
   bool month_first;
   bool temperature_in_celsius;
   bool temperature_tenths;
-  uint8_t reserved[39]; // for later growth
+  uint8_t reserved[SETTINGS_RESERVED_BYTES]; // for later growth
 } __attribute__((__packed__)) ClaySettings;
 
 ClaySettings s_settings;
@@ -57,6 +60,11 @@ static void default_settings() {
   s_settings.month_first            = false;
   s_settings.temperature_in_celsius = true;
   s_settings.temperature_tenths     = DEFAULT_TEMPERATURE_TENTHS;
+
+  // don't want to save undefined memory to storage
+  for (int i = 0; i < SETTINGS_RESERVED_BYTES; i++) {
+    s_settings.reserved[i] = 0;
+  }
 }
 
 typedef struct Weather {
@@ -66,7 +74,7 @@ typedef struct Weather {
 Weather s_weather_now;
 
 static void debug_bbox(GContext* ctx, GRect bbox) {
-  if (BBOX_DEBUG) {
+  if (DEBUG_BBOX) {
     graphics_context_set_stroke_width(ctx, 1);
     graphics_context_set_stroke_color(ctx, GColorWhite);
     graphics_draw_rect(ctx, bbox);
@@ -157,7 +165,14 @@ static void draw_date(GContext* ctx, GRect bbox, bool sep_on_bot, struct tm* now
   GRect upper, lower;
   hsplit_rect(ctx, bbox, &upper, &lower, true);
 
-  strftime(s_buffer, BUFFER_LEN, "%a", now);
+  strftime(s_buffer, BUFFER_LEN, "%A", now);
+
+  if (now->tm_wday == 3) {
+    // Cheat a little bit on the widest day (Wednesday)
+    // because I don't want to make the font smaller
+    upper.origin.x -= 5;
+    upper.size.w += 5;
+  }
   draw_title(ctx, upper);
 
   graphics_context_set_text_color(ctx, s_settings.color_corner_value);
@@ -270,6 +285,13 @@ static void tick_resub() {
 static void update_layer(Layer* layer, GContext* ctx) {
   time_t temp = time(NULL);
   struct tm* now = localtime(&temp);
+  if (DEBUG_TIME) {
+    now->tm_min = now->tm_sec;
+    now->tm_hour = now->tm_sec % 24;
+    now->tm_mday = now->tm_sec % 31 + 1;
+    now->tm_mon = now->tm_sec % 12;
+    now->tm_wday = now->tm_sec % 7;
+  }
 
   GRect bounds = layer_get_bounds(layer);
   GRect visible = layer_get_unobstructed_bounds(layer);
