@@ -37,6 +37,8 @@ static int s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
 #define SETTINGS_RESERVED_BYTES (36)
 
 typedef struct ClaySettings {
+  // Do not change the order!
+  // Preserved across updates.
   GColor color_background;
   GColor color_time_text;
   GColor color_corner_title;
@@ -46,10 +48,12 @@ typedef struct ClaySettings {
   uint8_t include_seconds;
   bool month_first;
   bool temperature_in_celsius;
+  // Above was present in Settings v1
   bool temperature_tenths;
   bool leading_zero_hour_in_12h;
   bool am_pm_in_12h;
   bool leading_zero_in_date;
+  // Above was present in Settings v2
 
   // for later growth
   uint8_t reserved[SETTINGS_RESERVED_BYTES];
@@ -73,6 +77,7 @@ static void default_settings() {
   s_settings.leading_zero_in_date = DEFAULT_LEADING_ZERO_IN_DATE;
 
   // don't want to save undefined memory to storage
+  // But Settings v1 didn't have this. Settings v2 started it.
   for (int i = 0; i < SETTINGS_RESERVED_BYTES; i++) {
     s_settings.reserved[i] = 0;
   }
