@@ -31,7 +31,9 @@ static int s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
 #define SECONDS_ON_WAKE (2)
 
 #define DEFAULT_TEMPERATURE_TENTHS (true)
-#define SETTINGS_RESERVED_BYTES (39)
+#define DEFAULT_LEADING_ZERO_IN_12H (false)
+#define DEFAULT_AM_PM_IN_12H (true)
+#define SETTINGS_RESERVED_BYTES (37)
 
 typedef struct ClaySettings {
   GColor color_background;
@@ -44,7 +46,11 @@ typedef struct ClaySettings {
   bool month_first;
   bool temperature_in_celsius;
   bool temperature_tenths;
-  uint8_t reserved[SETTINGS_RESERVED_BYTES]; // for later growth
+  bool leading_zero_hour_in_12h;
+  bool am_pm_in_12h;
+
+  // for later growth
+  uint8_t reserved[SETTINGS_RESERVED_BYTES];
 } __attribute__((__packed__)) ClaySettings;
 
 ClaySettings s_settings;
@@ -56,10 +62,12 @@ static void default_settings() {
   s_settings.color_corner_value = COLOR_FALLBACK(GColorChromeYellow,    GColorWhite);
   s_settings.color_separator    = COLOR_FALLBACK(GColorChromeYellow,    GColorWhite);
 
-  s_settings.include_seconds        = SECONDS_ALWAYS;
-  s_settings.month_first            = false;
+  s_settings.include_seconds = SECONDS_ALWAYS;
+  s_settings.month_first = false;
   s_settings.temperature_in_celsius = true;
-  s_settings.temperature_tenths     = DEFAULT_TEMPERATURE_TENTHS;
+  s_settings.temperature_tenths = DEFAULT_TEMPERATURE_TENTHS;
+  s_settings.leading_zero_hour_in_12h = DEFAULT_LEADING_ZERO_IN_12H;
+  s_settings.am_pm_in_12h = DEFAULT_AM_PM_IN_12H;
 
   // don't want to save undefined memory to storage
   for (int i = 0; i < SETTINGS_RESERVED_BYTES; i++) {
@@ -82,21 +90,68 @@ static void debug_bbox(GContext* ctx, GRect bbox) {
 }
 
 static int draw_time(GContext* ctx, struct tm* now, GRect visible) {
-  GPoint center = grect_center_point(&visible);
-  GFont font;
-  GRect bbox = rect_from_center(center, GSize(visible.size.w, 48 * 5 / 4));
-  int shift_up = 0;
-  if (s_time_units == SECOND_UNIT) {
-    font = s_font_lg;
-    shift_up = 1;
-  } else {
-    font = s_font_xl;
-    shift_up = 14;
-  }
-  debug_bbox(ctx, bbox);
   graphics_context_set_text_color(ctx, s_settings.color_time_text);
-  format_time(now, (s_time_units == SECOND_UNIT), s_buffer, BUFFER_LEN);
-  draw_text(ctx, s_buffer, font, bbox, GTextAlignmentCenter, shift_up);
+  bool include_seconds = (s_time_units == SECOND_UNIT);
+  bool include_am_pm = (!clock_is_24h_style() && s_settings.am_pm_in_12h);
+
+  GPoint center = grect_center_point(&visible);
+  GRect bbox = rect_from_center(center, GSize(visible.size.w, 48 * 5 / 4));
+
+  GRect left;
+  left.origin = bbox.origin;
+  left.size.w = bbox.size.w * 6 / 7;
+  left.size.h = bbox.size.h;
+
+  GRect right;
+  right.origin.x = bbox.origin.x + left.size.w;
+  right.origin.y = bbox.origin.y;
+  right.size.h = bbox.size.h;
+  right.size.w = visible.size.w - left.size.w;
+
+  GRect up_right;
+  up_right.origin = right.origin;
+  up_right.size.h = bbox.size.h / 2;
+  up_right.size.w = right.size.w;
+
+  GRect down_right;
+  down_right.origin.x = right.origin.x;
+  down_right.origin.y = right.origin.y + bbox.size.h / 2;
+  down_right.size.h = bbox.size.h / 2;
+  down_right.size.w = right.size.w;
+
+  // Draw Hours & Minutes
+  format_time(now, s_settings.leading_zero_hour_in_12h, s_buffer, BUFFER_LEN);
+  if (include_seconds || include_am_pm) {
+    debug_bbox(ctx, left);
+    debug_bbox(ctx, up_right);
+    debug_bbox(ctx, down_right);
+    draw_text(ctx, s_buffer, s_font_xl, left, GTextAlignmentRight, 14);
+  } else {
+    debug_bbox(ctx, bbox);
+    draw_text(ctx, s_buffer, s_font_xl, bbox, GTextAlignmentCenter, 14);
+  }
+
+  if (include_seconds) {
+    if (include_am_pm) {
+      // Up right has A/P
+      strftime(s_buffer, BUFFER_LEN, "%p", now);
+      s_buffer[1] = '\0'; // no M. just A/P.
+      draw_text(ctx, s_buffer, s_font_sm, up_right, GTextAlignmentCenter, 0);
+    }
+    // Down right has seconds
+    strftime(s_buffer, BUFFER_LEN, "%S", now);
+    draw_text(ctx, s_buffer, s_font_sm, down_right, GTextAlignmentCenter, 0);
+  } else if (include_am_pm) {
+    strftime(s_buffer, BUFFER_LEN, "%p", now);
+    s_buffer[1] = '\0'; // no M. just A/P.
+    if (now->tm_hour < 12) {
+      // Up right has A
+      draw_text(ctx, s_buffer, s_font_sm, up_right, GTextAlignmentCenter, 0);
+    } else {
+      // Down right has P
+      draw_text(ctx, s_buffer, s_font_sm, down_right, GTextAlignmentCenter, 0);
+    }
+  }
   return bbox.size.h;
 }
 
@@ -165,14 +220,7 @@ static void draw_date(GContext* ctx, GRect bbox, bool sep_on_bot, struct tm* now
   GRect upper, lower;
   hsplit_rect(ctx, bbox, &upper, &lower, true);
 
-  strftime(s_buffer, BUFFER_LEN, "%A", now);
-
-  if (now->tm_wday == 3) {
-    // Cheat a little bit on the widest day (Wednesday)
-    // because I don't want to make the font smaller
-    upper.origin.x -= 5;
-    upper.size.w += 5;
-  }
+  strftime(s_buffer, BUFFER_LEN, "%a", now);
   draw_title(ctx, upper);
 
   graphics_context_set_text_color(ctx, s_settings.color_corner_value);
@@ -290,7 +338,7 @@ static void update_layer(Layer* layer, GContext* ctx) {
     now->tm_hour = now->tm_sec % 24;
     now->tm_mday = now->tm_sec % 31 + 1;
     now->tm_mon = now->tm_sec % 12;
-    now->tm_wday = now->tm_sec % 7;
+    now->tm_wday = now->tm_wday % 7;
   }
 
   GRect bounds = layer_get_bounds(layer);
@@ -342,8 +390,10 @@ static void load_settings() {
 
   // Check for older versions of settings and migrate them
   if (loaded_version == 1) {
-    // temperature_tenths was in an undefined array before
+    // these were in an undefined array before
     s_settings.temperature_tenths = DEFAULT_TEMPERATURE_TENTHS;
+    s_settings.leading_zero_hour_in_12h = DEFAULT_LEADING_ZERO_IN_12H;
+    s_settings.am_pm_in_12h = DEFAULT_AM_PM_IN_12H;
   }
 }
 
@@ -363,6 +413,8 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, MESSAGE_KEY_month_first                  ))) { s_settings.month_first              = t->value->int8; }
   if ((t = dict_find(iter, MESSAGE_KEY_temperature_in_celsius       ))) { s_settings.temperature_in_celsius   = t->value->int8; }
   if ((t = dict_find(iter, MESSAGE_KEY_temperature_tenths           ))) { s_settings.temperature_tenths       = t->value->int8; }
+  if ((t = dict_find(iter, MESSAGE_KEY_leading_zero_hour_in_12h     ))) { s_settings.leading_zero_hour_in_12h = t->value->int8; }
+  if ((t = dict_find(iter, MESSAGE_KEY_am_pm_in_12h                 ))) { s_settings.am_pm_in_12h             = t->value->int8; }
 
   if ((t = dict_find(iter, MESSAGE_KEY_weather_now_temp_deci_c))) {
     s_weather_now.temp_deci_c = t->value->int32;
@@ -385,7 +437,7 @@ static void init(void) {
   s_font_xl = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_68));
   s_font_lg = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_50));
   s_font_md = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_34));
-  s_font_sm = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_20));
+  s_font_sm = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_22));
 
   load_settings();
   tick_timer_service_subscribe(s_time_units, tick_handler);

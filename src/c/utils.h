@@ -9,18 +9,26 @@ static GRect rect_from_center(GPoint center, GSize size) {
   return ret;
 }
 
-static void format_time(struct tm* now, bool include_seconds, char* buf, int buf_len) {
+static int get_12h_hour(struct tm* now) {
+  int hour = now->tm_hour % 12;
+  return (hour == 0) ? 12 : hour;
+}
+
+static void format_time(
+  struct tm* now,
+  bool leading_zero_hour_in_12h,
+  char* buf,
+  int buf_len
+) {
   if (clock_is_24h_style()) {
-    if (include_seconds) {
-      strftime(buf, buf_len, "%H:%M:%S", now);
-    } else {
-      strftime(buf, buf_len, "%H:%M", now);
-    }
+    strftime(buf, buf_len, "%H:%M", now);
   } else {
-    if (include_seconds) {
-      strftime(buf, buf_len, "%I:%M:%S", now);
-    } else {
+    if (leading_zero_hour_in_12h) {
       strftime(buf, buf_len, "%I:%M", now);
+    } else {
+      snprintf(buf, buf_len, "%d", get_12h_hour(now));
+      size_t len = strlen(buf);
+      strftime(buf + len, buf_len - len, ":%M", now);
     }
   }
 }

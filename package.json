@@ -37,14 +37,16 @@
       "month_first",
       "temperature_in_celsius",
       "temperature_tenths",
+      "leading_zero_hour_in_12h",
+      "am_pm_in_12h",
       "weather_now_temp_deci_c"
     ],
     "resources": {
       "media": [
-        {"name": "ROBOTO_68", "file": "fonts/Roboto-Regular.ttf", "characterRegex": "[0-9:\\.]", "type": "font"},
-        {"name": "ROBOTO_50", "file": "fonts/Roboto-Regular.ttf", "characterRegex": "[0-9:\\.]", "type": "font"},
-        {"name": "ROBOTO_34", "file": "fonts/Roboto-Regular.ttf", "characterRegex": "[fc0-9:%\\.\\-°/]", "type": "font"},
-        {"name": "ROBOTO_20", "file": "fonts/Roboto-Regular.ttf", "characterRegex": "[a-zA-Z\\.]", "type": "font"}
+        {"name": "ROBOTO_68", "file": "fonts/Roboto-Regular.ttf", "characterRegex": "[ 0-9:\\.]", "type": "font"},
+        {"name": "ROBOTO_50", "file": "fonts/Roboto-Regular.ttf", "characterRegex": "[ 0-9:\\.]", "type": "font"},
+        {"name": "ROBOTO_34", "file": "fonts/Roboto-Regular.ttf", "characterRegex": "[ a-zA-Z0-9:%\\.\\-°/]", "type": "font"},
+        {"name": "ROBOTO_22", "file": "fonts/Roboto-Regular.ttf", "characterRegex": "[ a-zA-Z0-9:%\\.\\-°/]", "type": "font"}
       ]
     }
   }
