@@ -39,6 +39,7 @@
       "temperature_tenths",
       "leading_zero_hour_in_12h",
       "am_pm_in_12h",
+      "leading_zero_in_date",
       "weather_now_temp_deci_c"
     ],
     "resources": {

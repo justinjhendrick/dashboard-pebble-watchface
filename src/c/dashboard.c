@@ -33,7 +33,8 @@ static int s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
 #define DEFAULT_TEMPERATURE_TENTHS (true)
 #define DEFAULT_LEADING_ZERO_IN_12H (false)
 #define DEFAULT_AM_PM_IN_12H (true)
-#define SETTINGS_RESERVED_BYTES (37)
+#define DEFAULT_LEADING_ZERO_IN_DATE (true)
+#define SETTINGS_RESERVED_BYTES (36)
 
 typedef struct ClaySettings {
   GColor color_background;
@@ -48,6 +49,7 @@ typedef struct ClaySettings {
   bool temperature_tenths;
   bool leading_zero_hour_in_12h;
   bool am_pm_in_12h;
+  bool leading_zero_in_date;
 
   // for later growth
   uint8_t reserved[SETTINGS_RESERVED_BYTES];
@@ -68,6 +70,7 @@ static void default_settings() {
   s_settings.temperature_tenths = DEFAULT_TEMPERATURE_TENTHS;
   s_settings.leading_zero_hour_in_12h = DEFAULT_LEADING_ZERO_IN_12H;
   s_settings.am_pm_in_12h = DEFAULT_AM_PM_IN_12H;
+  s_settings.leading_zero_in_date = DEFAULT_LEADING_ZERO_IN_DATE;
 
   // don't want to save undefined memory to storage
   for (int i = 0; i < SETTINGS_RESERVED_BYTES; i++) {
@@ -224,7 +227,7 @@ static void draw_date(GContext* ctx, GRect bbox, bool sep_on_bot, struct tm* now
   draw_title(ctx, upper);
 
   graphics_context_set_text_color(ctx, s_settings.color_corner_value);
-  format_date(now, s_settings.month_first, s_buffer, BUFFER_LEN);
+  format_date(now, s_settings.month_first, s_settings.leading_zero_in_date, s_buffer, BUFFER_LEN);
   draw_text(ctx, s_buffer, s_font_md, lower, GTextAlignmentCenter, 0);
   draw_separator(ctx, bbox, sep_on_bot);
 }
@@ -394,6 +397,7 @@ static void load_settings() {
     s_settings.temperature_tenths = DEFAULT_TEMPERATURE_TENTHS;
     s_settings.leading_zero_hour_in_12h = DEFAULT_LEADING_ZERO_IN_12H;
     s_settings.am_pm_in_12h = DEFAULT_AM_PM_IN_12H;
+    s_settings.leading_zero_in_date = DEFAULT_LEADING_ZERO_IN_DATE;
   }
 }
 
@@ -404,17 +408,18 @@ static void save_settings() {
 
 static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   Tuple *t;
-  if ((t = dict_find(iter, MESSAGE_KEY_color_background             ))) { s_settings.color_background         = GColorFromHEX(t->value->int32); }
-  if ((t = dict_find(iter, MESSAGE_KEY_color_time_text              ))) { s_settings.color_time_text          = GColorFromHEX(t->value->int32); }
-  if ((t = dict_find(iter, MESSAGE_KEY_color_corner_title           ))) { s_settings.color_corner_title       = GColorFromHEX(t->value->int32); }
-  if ((t = dict_find(iter, MESSAGE_KEY_color_corner_value           ))) { s_settings.color_corner_value       = GColorFromHEX(t->value->int32); }
-  if ((t = dict_find(iter, MESSAGE_KEY_color_separator              ))) { s_settings.color_separator          = GColorFromHEX(t->value->int32); }
-  if ((t = dict_find(iter, MESSAGE_KEY_include_seconds              ))) { s_settings.include_seconds          = atoi(t->value->cstring); }
-  if ((t = dict_find(iter, MESSAGE_KEY_month_first                  ))) { s_settings.month_first              = t->value->int8; }
-  if ((t = dict_find(iter, MESSAGE_KEY_temperature_in_celsius       ))) { s_settings.temperature_in_celsius   = t->value->int8; }
-  if ((t = dict_find(iter, MESSAGE_KEY_temperature_tenths           ))) { s_settings.temperature_tenths       = t->value->int8; }
-  if ((t = dict_find(iter, MESSAGE_KEY_leading_zero_hour_in_12h     ))) { s_settings.leading_zero_hour_in_12h = t->value->int8; }
-  if ((t = dict_find(iter, MESSAGE_KEY_am_pm_in_12h                 ))) { s_settings.am_pm_in_12h             = t->value->int8; }
+  if ((t = dict_find(iter, MESSAGE_KEY_color_background             ))) { s_settings.color_background          = GColorFromHEX(t->value->int32); }
+  if ((t = dict_find(iter, MESSAGE_KEY_color_time_text              ))) { s_settings.color_time_text           = GColorFromHEX(t->value->int32); }
+  if ((t = dict_find(iter, MESSAGE_KEY_color_corner_title           ))) { s_settings.color_corner_title        = GColorFromHEX(t->value->int32); }
+  if ((t = dict_find(iter, MESSAGE_KEY_color_corner_value           ))) { s_settings.color_corner_value        = GColorFromHEX(t->value->int32); }
+  if ((t = dict_find(iter, MESSAGE_KEY_color_separator              ))) { s_settings.color_separator           = GColorFromHEX(t->value->int32); }
+  if ((t = dict_find(iter, MESSAGE_KEY_include_seconds              ))) { s_settings.include_seconds           = atoi(t->value->cstring); }
+  if ((t = dict_find(iter, MESSAGE_KEY_month_first                  ))) { s_settings.month_first               = t->value->int8; }
+  if ((t = dict_find(iter, MESSAGE_KEY_temperature_in_celsius       ))) { s_settings.temperature_in_celsius    = t->value->int8; }
+  if ((t = dict_find(iter, MESSAGE_KEY_temperature_tenths           ))) { s_settings.temperature_tenths        = t->value->int8; }
+  if ((t = dict_find(iter, MESSAGE_KEY_leading_zero_hour_in_12h     ))) { s_settings.leading_zero_hour_in_12h  = t->value->int8; }
+  if ((t = dict_find(iter, MESSAGE_KEY_am_pm_in_12h                 ))) { s_settings.am_pm_in_12h              = t->value->int8; }
+  if ((t = dict_find(iter, MESSAGE_KEY_leading_zero_in_date         ))) { s_settings.leading_zero_in_date      = t->value->int8; }
 
   if ((t = dict_find(iter, MESSAGE_KEY_weather_now_temp_deci_c))) {
     s_weather_now.temp_deci_c = t->value->int32;

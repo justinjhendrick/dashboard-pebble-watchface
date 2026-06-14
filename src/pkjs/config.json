@@ -39,7 +39,8 @@
       { "type": "toggle",  "messageKey": "temperature_in_celsius",   "defaultValue": true,  "label": "temperature_in_celsius"},
       { "type": "toggle",  "messageKey": "temperature_tenths",       "defaultValue": true,  "label": "temperature_tenths"},
       { "type": "toggle",  "messageKey": "leading_zero_hour_in_12h", "defaultValue": false, "label": "leading_zero_hour_in_12h"},
-      { "type": "toggle",  "messageKey": "am_pm_in_12h",             "defaultValue": true,  "label": "am_pm_in_12h"}
+      { "type": "toggle",  "messageKey": "am_pm_in_12h",             "defaultValue": true,  "label": "am_pm_in_12h"},
+      { "type": "toggle",  "messageKey": "leading_zero_in_date",     "defaultValue": true, "label":  "leading_zero_in_date"}
     ]
   },
   {

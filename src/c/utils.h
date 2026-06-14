@@ -33,11 +33,19 @@ static void format_time(
   }
 }
 
-static void format_date(struct tm* now, bool month_first, char* buf, int buf_len) {
-  if (month_first) {
-    strftime(buf, buf_len, "%m/%d", now);
+static void format_date(struct tm* now, bool month_first, bool leading_zero, char* buf, int buf_len) {
+  if (!leading_zero) {
+    if (month_first) {
+      snprintf(buf, buf_len, "%d/%d", now->tm_mon + 1, now->tm_mday);
+    } else {
+      snprintf(buf, buf_len, "%d/%d", now->tm_mday, now->tm_mon + 1);
+    }
   } else {
-    strftime(buf, buf_len, "%d/%m", now);
+    if (month_first) {
+      strftime(buf, buf_len, "%m/%d", now);
+    } else {
+      strftime(buf, buf_len, "%d/%m", now);
+    }
   }
 }
 
