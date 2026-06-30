@@ -13,7 +13,7 @@ static GFont s_font_lg = NULL;
 static GFont s_font_md = NULL;
 static GFont s_font_sm = NULL;
 static TimeUnits s_time_units = SECOND_UNIT;
-static int s_num_remaining_awake_frames = -1;
+static time_t s_last_wake = 0;
 static time_t s_last_request_sent = 0;
 #define INIT_WEATHER_RETRY_SECONDS (5)
 #define MAX_WEATHER_RETRY_SECONDS (60 * 60)
@@ -312,35 +312,40 @@ static void tick_handler(struct tm* now, TimeUnits units_changed) {
   maybe_request_weather();
 }
 
-static void handle_accel_tap(AccelAxisType axis, int32_t direction) {
-  // TODO https://forum.repebble.com/t/show-seconds-only-when-backlight-is-active/565
+static void on_wake() {
   if (s_settings.include_seconds == SECONDS_ON_WAKE) {
-    s_num_remaining_awake_frames = 10;  // 10 frames = 10 seconds because of the units we select
+    s_last_wake = time(NULL);
     s_time_units = SECOND_UNIT;
     tick_timer_service_subscribe(s_time_units, tick_handler);
+    if (s_layer) layer_mark_dirty(s_layer);
   }
 }
 
-static void tick_resub() {
+static void handle_accel_tap(AccelAxisType axis, int32_t direction) {
+  on_wake();
+}
+
+static void handle_backlight(bool on) {
+  if (on) on_wake();
+}
+
+static void tick_resub(time_t now_s) {
   if (s_settings.include_seconds == SECONDS_NEVER && s_time_units != MINUTE_UNIT) {
     s_time_units = MINUTE_UNIT;
     tick_timer_service_subscribe(s_time_units, tick_handler);
-  } else if (s_settings.include_seconds == SECONDS_ON_WAKE && s_num_remaining_awake_frames == 0) {
+  } else if (s_settings.include_seconds == SECONDS_ON_WAKE && now_s > s_last_wake + 10 && s_time_units != MINUTE_UNIT) {
     s_time_units = MINUTE_UNIT;
     tick_timer_service_subscribe(s_time_units, tick_handler);
   } else if (s_settings.include_seconds == SECONDS_ALWAYS && s_time_units != SECOND_UNIT) {
     s_time_units = SECOND_UNIT;
     tick_timer_service_subscribe(s_time_units, tick_handler);
   }
-
-  if (s_num_remaining_awake_frames > -1) {
-    s_num_remaining_awake_frames--;
-  }
 }
 
 static void update_layer(Layer* layer, GContext* ctx) {
-  time_t temp = time(NULL);
-  struct tm* now = localtime(&temp);
+  time_t now_s = time(NULL);
+  struct tm* now = localtime(&now_s);
+  tick_resub(now_s);
   if (DEBUG_TIME) {
     now->tm_min = now->tm_sec;
     now->tm_hour = now->tm_sec % 24;
@@ -362,7 +367,7 @@ static void update_layer(Layer* layer, GContext* ctx) {
   GSize complication_size = GSize(bounds.size.w / 2, complication_height);
   int left  = bounds.origin.x + bounds.size.w / 4;
   int right = bounds.origin.x + bounds.size.w * 3 / 4;
-  int top = bounds.origin.y                  + complication_height / 2;
+  int top = bounds.origin.y                 + complication_height / 2;
   int bot = bounds.origin.y + bounds.size.h - complication_height / 2;
   bool sep_on_bot = true;
   bool sep_on_top = false;
@@ -373,8 +378,6 @@ static void update_layer(Layer* layer, GContext* ctx) {
     draw_steps(ctx, rect_from_center(GPoint(left,  bot), complication_size), sep_on_top);
     draw_temp(ctx, rect_from_center(GPoint(right, bot), complication_size), sep_on_top);
   }
-
-  tick_resub();
 }
 
 static void window_load(Window* window) {
@@ -434,13 +437,6 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   save_settings();
   // Update the display based on new settings
   if (s_layer) { layer_mark_dirty(s_layer); }
-  if (s_settings.include_seconds == SECONDS_ALWAYS) {
-    s_time_units = SECOND_UNIT;
-    tick_timer_service_subscribe(s_time_units, tick_handler);
-  } else {
-    s_time_units = MINUTE_UNIT;  // minutes until an event shortens it with a timer to return to minutes
-    tick_timer_service_subscribe(s_time_units, tick_handler);
-  }
 }
 
 static void init(void) {
@@ -450,10 +446,17 @@ static void init(void) {
   s_font_sm = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_ROBOTO_22));
 
   load_settings();
+
+  time_t now_s = time(NULL);
+  s_weather_now.temp_deci_c = INVALID_TEMP;
+  s_last_request_sent = now_s;  // because js sends weather on "ready" event
+  s_last_wake = now_s;  // Don't want the first update to compare against time 0.
+
   tick_timer_service_subscribe(s_time_units, tick_handler);
   accel_tap_service_subscribe(handle_accel_tap);
-  s_weather_now.temp_deci_c = INVALID_TEMP;
-  s_last_request_sent = time(NULL);  // because js sends weather on "ready" event
+  backlight_service_subscribe(handle_backlight);
+  on_wake(); // For SECONDS_ON_WAKE, loading the watch counts as a wakeup
+
   app_message_register_inbox_received(inbox_received_handler);
   app_message_open(1024, 64);
 
@@ -466,6 +469,7 @@ static void init(void) {
 }
 
 static void deinit(void) {
+  backlight_service_unsubscribe();
   accel_tap_service_unsubscribe();
   tick_timer_service_unsubscribe();
   if (s_window) { window_destroy(s_window); }
