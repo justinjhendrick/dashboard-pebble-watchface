@@ -30,6 +30,10 @@ static int s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
 #define SECONDS_ALWAYS (1)
 #define SECONDS_ON_WAKE (2)
 
+#define TITLE_ON_TOP (0)
+#define TITLE_ON_BOT (1)
+#define TITLE_HIDE (2)
+
 #define DEFAULT_TEMPERATURE_TENTHS (true)
 #define DEFAULT_LEADING_ZERO_IN_12H (false)
 #define DEFAULT_AM_PM_IN_12H (true)
@@ -163,27 +167,40 @@ static int draw_time(GContext* ctx, struct tm* now, GRect visible) {
   return bbox.size.h;
 }
 
-static void hsplit_rect(GContext* ctx, GRect bbox, GRect* upper, GRect* lower, bool big_on_bot) {
+static void hsplit_rect(GContext* ctx, GRect bbox, GRect* value, GRect* title, int title_loc) {
+  if (title_loc == TITLE_HIDE) {
+    *value = bbox;
+    *title = GRect(0, 0, 0, 0);
+    return;
+  }
+  GRect upper, lower;
   int upper_h;
-  if (big_on_bot) {
+  if (title_loc == TITLE_ON_TOP) {
     upper_h = bbox.size.h * 5 / 12;
   } else {
     upper_h = bbox.size.h * 7 / 12;
   }
-  *upper = GRect(
+  upper = GRect(
     bbox.origin.x,
     bbox.origin.y,
     bbox.size.w,
     upper_h
   );
-  *lower = GRect(
+  lower = GRect(
     bbox.origin.x,
     bbox.origin.y + upper_h,
     bbox.size.w,
     bbox.size.h - upper_h
   );
-  debug_bbox(ctx, *upper);
-  debug_bbox(ctx, *lower);
+  debug_bbox(ctx, upper);
+  debug_bbox(ctx, lower);
+  if (title_loc == TITLE_ON_TOP) {
+    *title = upper;
+    *value = lower;
+  } else {
+    *value = upper;
+    *title = lower;
+  }
 }
 
 static void draw_title(GContext* ctx, GRect bbox) {
@@ -210,55 +227,55 @@ static void draw_separator(GContext* ctx, GRect bbox, bool is_bot) {
   );
 }
 
-static void draw_batt(GContext* ctx, GRect bbox, bool sep_on_bot) {
-  GRect upper, lower;
-  hsplit_rect(ctx, bbox, &upper, &lower, true);
+static void draw_batt(GContext* ctx, GRect bbox, int title_loc) {
+  GRect value, title;
+  hsplit_rect(ctx, bbox, &value, &title, title_loc);
 
   snprintf(s_buffer, BUFFER_LEN, "%s", "Battery");
-  draw_title(ctx, upper);
+  draw_title(ctx, title);
 
   graphics_context_set_text_color(ctx, s_settings.color_corner_value);
   BatteryChargeState bcs = battery_state_service_peek();
   snprintf(s_buffer, BUFFER_LEN, "%d%%", bcs.charge_percent);
-  draw_text(ctx, s_buffer, s_font_md, lower, GTextAlignmentCenter, 0);
-  draw_separator(ctx, bbox, sep_on_bot);
+  draw_text(ctx, s_buffer, s_font_md, value, GTextAlignmentCenter, 0);
+  draw_separator(ctx, bbox, true);
 }
 
-static void draw_date(GContext* ctx, GRect bbox, bool sep_on_bot, struct tm* now) {
-  GRect upper, lower;
-  hsplit_rect(ctx, bbox, &upper, &lower, true);
+static void draw_date(GContext* ctx, GRect bbox, int title_loc, struct tm* now) {
+  GRect value, title;
+  hsplit_rect(ctx, bbox, &value, &title, title_loc);
 
   strftime(s_buffer, BUFFER_LEN, "%a", now);
-  draw_title(ctx, upper);
+  draw_title(ctx, title);
 
   graphics_context_set_text_color(ctx, s_settings.color_corner_value);
   format_date(now, s_settings.month_first, s_settings.leading_zero_in_date, s_buffer, BUFFER_LEN);
-  draw_text(ctx, s_buffer, s_font_md, lower, GTextAlignmentCenter, 0);
-  draw_separator(ctx, bbox, sep_on_bot);
+  draw_text(ctx, s_buffer, s_font_md, value, GTextAlignmentCenter, 0);
+  draw_separator(ctx, bbox, true);
 }
 
-static void draw_steps(GContext* ctx, GRect bbox, bool sep_on_bot) {
-  GRect upper, lower;
-  hsplit_rect(ctx, bbox, &upper, &lower, false);
+static void draw_steps(GContext* ctx, GRect bbox, int title_loc) {
+  GRect value, title;
+  hsplit_rect(ctx, bbox, &value, &title, title_loc);
   int steps = health_service_sum_today(HealthMetricStepCount);
   if (steps >= 10000) {
     snprintf(s_buffer, BUFFER_LEN, "%s", "kSteps");
-    draw_title(ctx, lower);
+    draw_title(ctx, title);
     snprintf(s_buffer, BUFFER_LEN, "%d.%d", steps / 1000, (steps % 1000) / 100);
   } else {
     snprintf(s_buffer, BUFFER_LEN, "%s", "Steps");
-    draw_title(ctx, lower);
+    draw_title(ctx, title);
     snprintf(s_buffer, BUFFER_LEN, "%d", steps);
   }
-  draw_value(ctx, upper);
-  draw_separator(ctx, bbox, sep_on_bot);
+  draw_value(ctx, value);
+  draw_separator(ctx, bbox, false);
 }
 
-static void draw_temp(GContext* ctx, GRect bbox, bool sep_on_bot) {
-  GRect upper, lower;
-  hsplit_rect(ctx, bbox, &upper, &lower, false);
+static void draw_temp(GContext* ctx, GRect bbox, int title_loc) {
+  GRect value, title;
+  hsplit_rect(ctx, bbox, &value, &title, title_loc);
   snprintf(s_buffer, BUFFER_LEN, "%s", "Weather");
-  draw_title(ctx, lower);
+  draw_title(ctx, title);
   if (s_weather_now.temp_deci_c == INVALID_TEMP) {
     snprintf(s_buffer, BUFFER_LEN, "%s°", "--");
   } else if (s_settings.temperature_in_celsius) {
@@ -275,8 +292,8 @@ static void draw_temp(GContext* ctx, GRect bbox, bool sep_on_bot) {
       snprintf(s_buffer, BUFFER_LEN, "%d°f", (temp_deci_f + 5) / 10);
     }
   }
-  draw_value(ctx, upper);
-  draw_separator(ctx, bbox, sep_on_bot);
+  draw_value(ctx, value);
+  draw_separator(ctx, bbox, false);
 }
 
 static void maybe_request_weather() {
@@ -359,25 +376,23 @@ static void update_layer(Layer* layer, GContext* ctx) {
   bool timeline_quick_view = visible.size.h < bounds.size.h - 1;
 
   graphics_context_set_fill_color(ctx, s_settings.color_background);
-  graphics_fill_rect(ctx, bounds, 0, GCornerNone);
+  graphics_fill_rect(ctx, visible, 0, GCornerNone);
 
-  int time_bbox_height = draw_time(ctx, now, bounds);
+  int time_bbox_height = draw_time(ctx, now, visible);
 
-  int complication_height = (bounds.size.h - time_bbox_height) / 2 - 10;
-  GSize complication_size = GSize(bounds.size.w / 2, complication_height);
-  int left  = bounds.origin.x + bounds.size.w / 4;
-  int right = bounds.origin.x + bounds.size.w * 3 / 4;
-  int top = bounds.origin.y                 + complication_height / 2;
-  int bot = bounds.origin.y + bounds.size.h - complication_height / 2;
-  bool sep_on_bot = true;
-  bool sep_on_top = false;
+  int complication_height = (visible.size.h - time_bbox_height) / 2 - 10;
+  GSize complication_size = GSize(visible.size.w / 2, complication_height);
+  int left  = visible.origin.x + visible.size.w / 4;
+  int right = visible.origin.x + visible.size.w * 3 / 4;
+  int top = visible.origin.y                 + complication_height / 2;
+  int bot = visible.origin.y + visible.size.h - complication_height / 2;
+  int upper_row = timeline_quick_view ? TITLE_HIDE : TITLE_ON_TOP;
+  int lower_row = timeline_quick_view ? TITLE_HIDE : TITLE_ON_BOT;
 
-  draw_batt(ctx, rect_from_center(GPoint(left,  top), complication_size), sep_on_bot);
-  draw_date(ctx, rect_from_center(GPoint(right, top), complication_size), sep_on_bot, now);
-  if (!timeline_quick_view) {
-    draw_steps(ctx, rect_from_center(GPoint(left,  bot), complication_size), sep_on_top);
-    draw_temp(ctx, rect_from_center(GPoint(right, bot), complication_size), sep_on_top);
-  }
+  draw_batt(ctx, rect_from_center(GPoint(left,  top), complication_size), upper_row);
+  draw_date(ctx, rect_from_center(GPoint(right, top), complication_size), upper_row, now);
+  draw_steps(ctx, rect_from_center(GPoint(left,  bot), complication_size), lower_row);
+  draw_temp(ctx, rect_from_center(GPoint(right, bot), complication_size), lower_row);
 }
 
 static void window_load(Window* window) {
