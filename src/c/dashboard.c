@@ -30,15 +30,33 @@ static int s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
 #define SECONDS_ALWAYS (1)
 #define SECONDS_ON_WAKE (2)
 
-#define TITLE_ON_TOP (0)
-#define TITLE_ON_BOT (1)
-#define TITLE_HIDE (2)
+#define MODULE_NONE (0)
+#define MODULE_BATTERY (1)
+#define MODULE_DATE (2)
+#define MODULE_STEPS (3)
+#define MODULE_TEMP_NOW (4)
+#define MODULE_HEART_RATE (5)
+// TODO
+// UV index
+// Rainfall in next few hours
+// Sunset
+// Sunrise
+// Quiet time
+// Bluetooth connected
+// Temperature high today
+// Temperature low today
+// Wind direction & speed now
+// Weather icon (cloudy, sunny, etc)
 
 #define DEFAULT_TEMPERATURE_TENTHS (true)
 #define DEFAULT_LEADING_ZERO_IN_12H (false)
 #define DEFAULT_AM_PM_IN_12H (true)
 #define DEFAULT_LEADING_ZERO_IN_DATE (true)
-#define SETTINGS_RESERVED_BYTES (36)
+#define DEFAULT_MODULE_TOP_LEFT (MODULE_BATTERY)
+#define DEFAULT_MODULE_TOP_RIGHT (MODULE_DATE)
+#define DEFAULT_MODULE_BOT_LEFT (MODULE_STEPS)
+#define DEFAULT_MODULE_BOT_RIGHT (MODULE_TEMP_NOW)
+#define SETTINGS_RESERVED_BYTES (32)
 
 typedef struct ClaySettings {
   // Do not change the order!
@@ -58,6 +76,11 @@ typedef struct ClaySettings {
   bool am_pm_in_12h;
   bool leading_zero_in_date;
   // Above was present in Settings v2
+  uint8_t module_top_left;
+  uint8_t module_top_right;
+  uint8_t module_bot_left;
+  uint8_t module_bot_right;
+  // Above was present in Settings v3
 
   // for later growth
   uint8_t reserved[SETTINGS_RESERVED_BYTES];
@@ -79,6 +102,11 @@ static void default_settings() {
   s_settings.leading_zero_hour_in_12h = DEFAULT_LEADING_ZERO_IN_12H;
   s_settings.am_pm_in_12h = DEFAULT_AM_PM_IN_12H;
   s_settings.leading_zero_in_date = DEFAULT_LEADING_ZERO_IN_DATE;
+
+  s_settings.module_top_left = DEFAULT_MODULE_TOP_LEFT;
+  s_settings.module_top_right = DEFAULT_MODULE_TOP_RIGHT;
+  s_settings.module_bot_left = DEFAULT_MODULE_BOT_LEFT;
+  s_settings.module_bot_right = DEFAULT_MODULE_BOT_RIGHT;
 
   // don't want to save undefined memory to storage
   // But Settings v1 didn't have this. Settings v2 started it.
@@ -167,15 +195,15 @@ static int draw_time(GContext* ctx, struct tm* now, GRect visible) {
   return bbox.size.h;
 }
 
-static void hsplit_rect(GContext* ctx, GRect bbox, GRect* value, GRect* title, int title_loc) {
-  if (title_loc == TITLE_HIDE) {
+static void hsplit_rect(GContext* ctx, GRect bbox, GRect* value, GRect* title, bool title_on_top, bool hide_title) {
+  if (hide_title) {
     *value = bbox;
     *title = GRect(0, 0, 0, 0);
     return;
   }
   GRect upper, lower;
   int upper_h;
-  if (title_loc == TITLE_ON_TOP) {
+  if (title_on_top) {
     upper_h = bbox.size.h * 5 / 12;
   } else {
     upper_h = bbox.size.h * 7 / 12;
@@ -194,7 +222,7 @@ static void hsplit_rect(GContext* ctx, GRect bbox, GRect* value, GRect* title, i
   );
   debug_bbox(ctx, upper);
   debug_bbox(ctx, lower);
-  if (title_loc == TITLE_ON_TOP) {
+  if (title_on_top) {
     *title = upper;
     *value = lower;
   } else {
@@ -213,11 +241,11 @@ static void draw_value(GContext* ctx, GRect bbox) {
   draw_text(ctx, s_buffer, s_font_md, bbox, GTextAlignmentCenter, 0);
 }
 
-static void draw_separator(GContext* ctx, GRect bbox, bool is_bot) {
+static void draw_separator(GContext* ctx, GRect bbox, bool title_on_top) {
   graphics_context_set_stroke_width(ctx, 3);
   graphics_context_set_stroke_color(ctx, s_settings.color_separator);
   int height = bbox.origin.y;
-  if (is_bot) {
+  if (title_on_top) {
     height += bbox.size.h - 1;
   }
   int width = bbox.size.w;
@@ -227,10 +255,7 @@ static void draw_separator(GContext* ctx, GRect bbox, bool is_bot) {
   );
 }
 
-static void draw_batt(GContext* ctx, GRect bbox, int title_loc) {
-  GRect value, title;
-  hsplit_rect(ctx, bbox, &value, &title, title_loc);
-
+static void draw_batt(GContext* ctx, GRect value, GRect title, struct tm* now) {
   snprintf(s_buffer, BUFFER_LEN, "%s", "Battery");
   draw_title(ctx, title);
 
@@ -238,25 +263,18 @@ static void draw_batt(GContext* ctx, GRect bbox, int title_loc) {
   BatteryChargeState bcs = battery_state_service_peek();
   snprintf(s_buffer, BUFFER_LEN, "%d%%", bcs.charge_percent);
   draw_text(ctx, s_buffer, s_font_md, value, GTextAlignmentCenter, 0);
-  draw_separator(ctx, bbox, true);
 }
 
-static void draw_date(GContext* ctx, GRect bbox, int title_loc, struct tm* now) {
-  GRect value, title;
-  hsplit_rect(ctx, bbox, &value, &title, title_loc);
-
+static void draw_date(GContext* ctx, GRect value, GRect title, struct tm* now) {
   strftime(s_buffer, BUFFER_LEN, "%a", now);
   draw_title(ctx, title);
 
   graphics_context_set_text_color(ctx, s_settings.color_corner_value);
   format_date(now, s_settings.month_first, s_settings.leading_zero_in_date, s_buffer, BUFFER_LEN);
   draw_text(ctx, s_buffer, s_font_md, value, GTextAlignmentCenter, 0);
-  draw_separator(ctx, bbox, true);
 }
 
-static void draw_steps(GContext* ctx, GRect bbox, int title_loc) {
-  GRect value, title;
-  hsplit_rect(ctx, bbox, &value, &title, title_loc);
+static void draw_steps(GContext* ctx, GRect value, GRect title, struct tm* now) {
   int steps = health_service_sum_today(HealthMetricStepCount);
   if (steps >= 10000) {
     snprintf(s_buffer, BUFFER_LEN, "%s", "kSteps");
@@ -268,12 +286,9 @@ static void draw_steps(GContext* ctx, GRect bbox, int title_loc) {
     snprintf(s_buffer, BUFFER_LEN, "%d", steps);
   }
   draw_value(ctx, value);
-  draw_separator(ctx, bbox, false);
 }
 
-static void draw_temp(GContext* ctx, GRect bbox, int title_loc) {
-  GRect value, title;
-  hsplit_rect(ctx, bbox, &value, &title, title_loc);
+static void draw_temp(GContext* ctx, GRect value, GRect title, struct tm* now) {
   snprintf(s_buffer, BUFFER_LEN, "%s", "Weather");
   draw_title(ctx, title);
   if (s_weather_now.temp_deci_c == INVALID_TEMP) {
@@ -293,7 +308,35 @@ static void draw_temp(GContext* ctx, GRect bbox, int title_loc) {
     }
   }
   draw_value(ctx, value);
-  draw_separator(ctx, bbox, false);
+}
+
+static void draw_heart_rate(GContext* ctx, GRect value, GRect title, struct tm* now) {
+  snprintf(s_buffer, BUFFER_LEN, "%s", "Heart");
+  draw_title(ctx, title);
+  int bpm = health_service_peek_current_value(HealthMetricHeartRateBPM);
+  if (bpm > 0) {
+    snprintf(s_buffer, BUFFER_LEN, "%d", bpm);
+  } else {
+    snprintf(s_buffer, BUFFER_LEN, "%s", "--");
+  }
+  draw_value(ctx, value);
+}
+
+static void draw_module(GContext* ctx, uint8_t module_id, struct tm* now, GRect full_bbox, bool title_on_top, bool title_hide) {
+  GRect value, title;
+  hsplit_rect(ctx, full_bbox, &value, &title, title_on_top, title_hide);
+  if (module_id == MODULE_BATTERY) {
+    draw_batt(ctx, value, title, now);
+  } else if (module_id == MODULE_DATE) {
+    draw_date(ctx, value, title, now);
+  } else if (module_id == MODULE_STEPS) {
+    draw_steps(ctx, value, title, now);
+  } else if (module_id == MODULE_TEMP_NOW) {
+    draw_temp(ctx, value, title, now);
+  } else if (module_id == MODULE_HEART_RATE) {
+    draw_heart_rate(ctx, value, title, now);
+  }
+  draw_separator(ctx, full_bbox, title_on_top);
 }
 
 static void maybe_request_weather() {
@@ -386,13 +429,12 @@ static void update_layer(Layer* layer, GContext* ctx) {
   int right = visible.origin.x + visible.size.w * 3 / 4;
   int top = visible.origin.y                 + complication_height / 2;
   int bot = visible.origin.y + visible.size.h - complication_height / 2;
-  int upper_row = timeline_quick_view ? TITLE_HIDE : TITLE_ON_TOP;
-  int lower_row = timeline_quick_view ? TITLE_HIDE : TITLE_ON_BOT;
+  bool title_hide = timeline_quick_view;
 
-  draw_batt(ctx, rect_from_center(GPoint(left,  top), complication_size), upper_row);
-  draw_date(ctx, rect_from_center(GPoint(right, top), complication_size), upper_row, now);
-  draw_steps(ctx, rect_from_center(GPoint(left,  bot), complication_size), lower_row);
-  draw_temp(ctx, rect_from_center(GPoint(right, bot), complication_size), lower_row);
+  draw_module(ctx, s_settings.module_top_left, now, rect_from_center(GPoint(left,  top), complication_size), true, title_hide);
+  draw_module(ctx, s_settings.module_top_right, now, rect_from_center(GPoint(right, top), complication_size), true, title_hide);
+  draw_module(ctx, s_settings.module_bot_left, now, rect_from_center(GPoint(left,  bot), complication_size), false, title_hide);
+  draw_module(ctx, s_settings.module_bot_right, now, rect_from_center(GPoint(right, bot), complication_size), false, title_hide);
 }
 
 static void window_load(Window* window) {
@@ -422,10 +464,16 @@ static void load_settings() {
     s_settings.am_pm_in_12h = DEFAULT_AM_PM_IN_12H;
     s_settings.leading_zero_in_date = DEFAULT_LEADING_ZERO_IN_DATE;
   }
+  if (loaded_version < 3) {
+    s_settings.module_top_left = DEFAULT_MODULE_TOP_LEFT;
+    s_settings.module_top_right = DEFAULT_MODULE_TOP_RIGHT;
+    s_settings.module_bot_left = DEFAULT_MODULE_BOT_LEFT;
+    s_settings.module_bot_right = DEFAULT_MODULE_BOT_RIGHT;
+  }
 }
 
 static void save_settings() {
-  persist_write_int(SETTINGS_VERSION_KEY, 2);
+  persist_write_int(SETTINGS_VERSION_KEY, 3);
   persist_write_data(SETTINGS_KEY, &s_settings, sizeof(ClaySettings));
 }
 
@@ -443,6 +491,10 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, MESSAGE_KEY_leading_zero_hour_in_12h     ))) { s_settings.leading_zero_hour_in_12h  = t->value->int8; }
   if ((t = dict_find(iter, MESSAGE_KEY_am_pm_in_12h                 ))) { s_settings.am_pm_in_12h              = t->value->int8; }
   if ((t = dict_find(iter, MESSAGE_KEY_leading_zero_in_date         ))) { s_settings.leading_zero_in_date      = t->value->int8; }
+  if ((t = dict_find(iter, MESSAGE_KEY_module_top_left              ))) { s_settings.module_top_left           = atoi(t->value->cstring); }
+  if ((t = dict_find(iter, MESSAGE_KEY_module_top_right             ))) { s_settings.module_top_right          = atoi(t->value->cstring); }
+  if ((t = dict_find(iter, MESSAGE_KEY_module_bot_left              ))) { s_settings.module_bot_left           = atoi(t->value->cstring); }
+  if ((t = dict_find(iter, MESSAGE_KEY_module_bot_right             ))) { s_settings.module_bot_right          = atoi(t->value->cstring); }
 
   if ((t = dict_find(iter, MESSAGE_KEY_weather_now_temp_deci_c))) {
     s_weather_now.temp_deci_c = t->value->int32;

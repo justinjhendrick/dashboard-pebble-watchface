@@ -1,7 +1,7 @@
 {
   "name": "Tempilation",
   "author": "justinjhendrick, SocketMix",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "keywords": [
     "pebble-watchface",
     "digital",
@@ -21,6 +21,7 @@
     "uuid": "658a0530-fdbb-4573-a047-303111dee408",
     "sdkVersion": "3",
     "enableMultiJS": true,
+    "capabilities": [ "health" ],
     "targetPlatforms": [
       "emery"
     ],
@@ -40,7 +41,11 @@
       "leading_zero_hour_in_12h",
       "am_pm_in_12h",
       "leading_zero_in_date",
-      "weather_now_temp_deci_c"
+      "weather_now_temp_deci_c",
+      "module_top_left",
+      "module_top_right",
+      "module_bot_left",
+      "module_bot_right"
     ],
     "resources": {
       "media": [

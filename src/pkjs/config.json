@@ -21,18 +21,9 @@
         "defaultValue": "1",
         "label": "include_seconds",
         "options": [
-          {
-            "label": "Always",
-            "value": "1"
-          },
-          {
-            "label": "Never",
-            "value": "0"
-          },
-          {
-            "label": "On Wake",
-            "value": "2"
-          }
+          { "label": "Always", "value": "1" },
+          { "label": "Never", "value": "0" },
+          { "label": "On Wake", "value": "2" }
         ]
       },
       { "type": "toggle",  "messageKey": "month_first",              "defaultValue": false, "label": "month_first"},
@@ -41,6 +32,52 @@
       { "type": "toggle",  "messageKey": "leading_zero_in_date",     "defaultValue": true, "label":  "leading_zero_in_date"},
       { "type": "toggle",  "messageKey": "leading_zero_hour_in_12h", "defaultValue": false, "label": "leading_zero_hour_in_12h"},
       { "type": "toggle",  "messageKey": "am_pm_in_12h",             "defaultValue": true,  "label": "am_pm_in_12h"}
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      { "type": "heading", "defaultValue": "Modules" },
+      { "type": "select", "messageKey": "module_top_left", "defaultValue": "1", "label": "module_top_left",
+        "options": [
+          { "label": "None",            "value": "0" },
+          { "label": "Battery",         "value": "1" },
+          { "label": "Date",            "value": "2" },
+          { "label": "Steps",           "value": "3" },
+          { "label": "Temperature Now", "value": "4" },
+          { "label": "Heart Rate",      "value": "5" }
+        ]
+      },
+      { "type": "select", "messageKey": "module_top_right", "defaultValue": "2", "label": "module_top_right",
+        "options": [
+          { "label": "None",            "value": "0" },
+          { "label": "Battery",         "value": "1" },
+          { "label": "Date",            "value": "2" },
+          { "label": "Steps",           "value": "3" },
+          { "label": "Temperature Now", "value": "4" },
+          { "label": "Heart Rate",      "value": "5" }
+        ]
+      },
+      { "type": "select", "messageKey": "module_bot_left", "defaultValue": "3", "label": "module_bot_left",
+        "options": [
+          { "label": "None",            "value": "0" },
+          { "label": "Battery",         "value": "1" },
+          { "label": "Date",            "value": "2" },
+          { "label": "Steps",           "value": "3" },
+          { "label": "Temperature Now", "value": "4" },
+          { "label": "Heart Rate",      "value": "5" }
+        ]
+      },
+      { "type": "select", "messageKey": "module_bot_right", "defaultValue": "4", "label": "module_bot_right",
+        "options": [
+          { "label": "None",            "value": "0" },
+          { "label": "Battery",         "value": "1" },
+          { "label": "Date",            "value": "2" },
+          { "label": "Steps",           "value": "3" },
+          { "label": "Temperature Now", "value": "4" },
+          { "label": "Heart Rate",      "value": "5" }
+        ]
+      }
     ]
   },
   {
