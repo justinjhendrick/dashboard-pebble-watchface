@@ -42,6 +42,8 @@
       "am_pm_in_12h",
       "leading_zero_in_date",
       "weather_now_temp_deci_c",
+      "weather_rain_1h_dmm",
+      "weather_rain_6h_dmm",
       "module_top_left",
       "module_top_right",
       "module_bot_left",

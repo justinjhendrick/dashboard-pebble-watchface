@@ -24,7 +24,9 @@ static int s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
 
 #define SETTINGS_VERSION_KEY (1)
 #define SETTINGS_KEY (2)
+
 #define INVALID_TEMP (9999)
+#define INVALID_RAIN (-1)
 
 #define SECONDS_NEVER (0)
 #define SECONDS_ALWAYS (1)
@@ -36,17 +38,22 @@ static int s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
 #define MODULE_STEPS (3)
 #define MODULE_TEMP_NOW (4)
 #define MODULE_HEART_RATE (5)
+#define MODULE_RAIN_1H (6)
+#define MODULE_RAIN_6H (7)
 // TODO
-// UV index
-// Rainfall in next few hours
-// Sunset
-// Sunrise
-// Quiet time
-// Bluetooth connected
-// Temperature high today
-// Temperature low today
-// Wind direction & speed now
-// Weather icon (cloudy, sunny, etc)
+// WEATHER
+//   UV index
+//   Temperature high today
+//   Temperature low today
+//   Wind direction & speed now
+//
+// ASTRONOMICAL
+//   Sunset
+//   Sunrise
+//
+// WATCH
+//   Quiet time
+//   Bluetooth connected
 
 #define DEFAULT_TEMPERATURE_TENTHS (true)
 #define DEFAULT_LEADING_ZERO_IN_12H (false)
@@ -117,9 +124,11 @@ static void default_settings() {
 
 typedef struct Weather {
   int temp_deci_c;
+  int rain_1h_dmm;
+  int rain_6h_dmm;
 } Weather;
 
-Weather s_weather_now;
+Weather s_weather;
 
 static void debug_bbox(GContext* ctx, GRect bbox) {
   if (DEBUG_BBOX) {
@@ -291,16 +300,16 @@ static void draw_steps(GContext* ctx, GRect value, GRect title, struct tm* now) 
 static void draw_temp(GContext* ctx, GRect value, GRect title, struct tm* now) {
   snprintf(s_buffer, BUFFER_LEN, "%s", "Weather");
   draw_title(ctx, title);
-  if (s_weather_now.temp_deci_c == INVALID_TEMP) {
+  if (s_weather.temp_deci_c == INVALID_TEMP) {
     snprintf(s_buffer, BUFFER_LEN, "%s°", "--");
   } else if (s_settings.temperature_in_celsius) {
     if (s_settings.temperature_tenths) {
-      snprintf(s_buffer, BUFFER_LEN, "%d.%d°c", s_weather_now.temp_deci_c / 10, s_weather_now.temp_deci_c % 10);
+      snprintf(s_buffer, BUFFER_LEN, "%d.%d°c", s_weather.temp_deci_c / 10, s_weather.temp_deci_c % 10);
     } else {
-      snprintf(s_buffer, BUFFER_LEN, "%d°c", (s_weather_now.temp_deci_c + 5) / 10);
+      snprintf(s_buffer, BUFFER_LEN, "%d°c", (s_weather.temp_deci_c + 5) / 10);
     }
   } else {
-    int temp_deci_f = s_weather_now.temp_deci_c * 9 / 5 + 320;
+    int temp_deci_f = s_weather.temp_deci_c * 9 / 5 + 320;
     if (s_settings.temperature_tenths) {
       snprintf(s_buffer, BUFFER_LEN, "%d.%d°f", temp_deci_f / 10, temp_deci_f % 10);
     } else {
@@ -322,6 +331,17 @@ static void draw_heart_rate(GContext* ctx, GRect value, GRect title, struct tm* 
   draw_value(ctx, value);
 }
 
+static void draw_rain(GContext* ctx, GRect value, GRect title, struct tm* now, int hours, int rain_dmm) {
+  snprintf(s_buffer, BUFFER_LEN, "Rain %dh", hours);
+  draw_title(ctx, title);
+  if (rain_dmm == INVALID_RAIN) {
+    snprintf(s_buffer, BUFFER_LEN, "%s", "--");
+  } else {
+    snprintf(s_buffer, BUFFER_LEN, "%d.%d", rain_dmm / 10, rain_dmm % 10);
+  }
+  draw_value(ctx, value);
+}
+
 static void draw_module(GContext* ctx, uint8_t module_id, struct tm* now, GRect full_bbox, bool title_on_top, bool title_hide) {
   GRect value, title;
   hsplit_rect(ctx, full_bbox, &value, &title, title_on_top, title_hide);
@@ -335,6 +355,10 @@ static void draw_module(GContext* ctx, uint8_t module_id, struct tm* now, GRect 
     draw_temp(ctx, value, title, now);
   } else if (module_id == MODULE_HEART_RATE) {
     draw_heart_rate(ctx, value, title, now);
+  } else if (module_id == MODULE_RAIN_1H) {
+    draw_rain(ctx, value, title, now, 1, s_weather.rain_1h_dmm);
+  } else if (module_id == MODULE_RAIN_6H) {
+    draw_rain(ctx, value, title, now, 6, s_weather.rain_6h_dmm);
   }
   draw_separator(ctx, full_bbox, title_on_top);
 }
@@ -342,7 +366,7 @@ static void draw_module(GContext* ctx, uint8_t module_id, struct tm* now, GRect 
 static void maybe_request_weather() {
   time_t now = time(NULL);
   bool should_request = false;
-  if (s_weather_now.temp_deci_c == INVALID_TEMP && now >= s_last_request_sent + s_weather_retry_seconds) {
+  if (s_weather.temp_deci_c == INVALID_TEMP && now >= s_last_request_sent + s_weather_retry_seconds) {
     // Retry multiple times while temp is invalid
     should_request = true;
 
@@ -496,8 +520,10 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, MESSAGE_KEY_module_bot_left              ))) { s_settings.module_bot_left           = atoi(t->value->cstring); }
   if ((t = dict_find(iter, MESSAGE_KEY_module_bot_right             ))) { s_settings.module_bot_right          = atoi(t->value->cstring); }
 
+  if ((t = dict_find(iter, MESSAGE_KEY_weather_rain_1h_dmm             ))) { s_weather.rain_1h_dmm  = t->value->int32; }
+  if ((t = dict_find(iter, MESSAGE_KEY_weather_rain_6h_dmm             ))) { s_weather.rain_6h_dmm  = t->value->int32; }
   if ((t = dict_find(iter, MESSAGE_KEY_weather_now_temp_deci_c))) {
-    s_weather_now.temp_deci_c = t->value->int32;
+    s_weather.temp_deci_c = t->value->int32;
     s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
   }
 
@@ -515,7 +541,11 @@ static void init(void) {
   load_settings();
 
   time_t now_s = time(NULL);
-  s_weather_now.temp_deci_c = INVALID_TEMP;
+
+  s_weather.temp_deci_c = INVALID_TEMP;
+  s_weather.rain_1h_dmm = INVALID_RAIN;
+  s_weather.rain_6h_dmm = INVALID_RAIN;
+
   s_last_request_sent = now_s;  // because js sends weather on "ready" event
   s_last_wake = now_s;  // Don't want the first update to compare against time 0.
 

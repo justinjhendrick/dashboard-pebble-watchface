@@ -26,10 +26,15 @@ function getRequest(url, onload, onerror) {
   xhr.send();
 }
 
-var INVALID_TEMP = 9999; // must match watch side definition
+// These INVALIDS must match watch side definition
+var INVALID_TEMP = 9999;
+var INVALID_RAIN = -1;
+
 var weather_cache = {
   time: 0,
   temp_deci_c: INVALID_TEMP,
+  rain_1h_dmm: INVALID_RAIN,
+  rain_6h_dmm: INVALID_RAIN,
 }
 var location_cache = {
   lat: null,
@@ -52,7 +57,11 @@ function getWeather() {
   ) {
     console.log("reusing cached weather from " + weather_cache.time);
     Pebble.sendAppMessage(
-      {weather_now_temp_deci_c: weather_cache.temp_deci_c},
+      {
+        weather_now_temp_deci_c: weather_cache.temp_deci_c,
+        weather_rain_1h_dmm: weather_cache.rain_1h_dmm,
+        weather_rain_6h_dmm: weather_cache.rain_6h_dmm,
+      },
       function() {},
       function(e) { console.log("Error sending weather to Pebble: " + e.error.message); }
     );
@@ -83,13 +92,21 @@ function getWeather() {
     }
     var json = JSON.parse(response.responseText);
     var temperature_celsius = json.properties.timeseries[0].data.instant.details.air_temperature;
+    var rain_1h_dmm = Math.round(json.properties.timeseries[0].data.next_1_hours.details.precipitation_amount * 10);
+    var rain_6h_dmm = Math.round(json.properties.timeseries[0].data.next_6_hours.details.precipitation_amount * 10);
     var temp_deci_c = Math.round(temperature_celsius * 10);
     console.log("Got Temp " + temperature_celsius + "C from remote server");
     weather_cache.time = Date.now();
     weather_cache.temp_deci_c = temp_deci_c;
+    weather_cache.rain_1h_dmm = rain_1h_dmm;
+    weather_cache.rain_6h_dmm = rain_6h_dmm;
     localStorage.setItem("weather_cache_v2", JSON.stringify(weather_cache))
     Pebble.sendAppMessage(
-      {weather_now_temp_deci_c: temp_deci_c},
+      {
+        weather_now_temp_deci_c: weather_cache.temp_deci_c,
+        weather_rain_1h_dmm: weather_cache.rain_1h_dmm,
+        weather_rain_6h_dmm: weather_cache.rain_6h_dmm,
+      },
       function() {},
       function(e) { console.log("Error sending weather to Pebble: " + e.error.message); }
     );
