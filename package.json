@@ -44,6 +44,8 @@
       "weather_now_temp_deci_c",
       "weather_rain_1h_dmm",
       "weather_rain_6h_dmm",
+      "sunrise",
+      "sunset",
       "module_top_left",
       "module_top_right",
       "module_bot_left",

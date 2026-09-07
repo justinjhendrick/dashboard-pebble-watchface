@@ -27,6 +27,7 @@ static int s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
 
 #define INVALID_TEMP (9999)
 #define INVALID_RAIN (-1)
+#define INVALID_TIME (0)
 
 #define SECONDS_NEVER (0)
 #define SECONDS_ALWAYS (1)
@@ -40,16 +41,15 @@ static int s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
 #define MODULE_HEART_RATE (5)
 #define MODULE_RAIN_1H (6)
 #define MODULE_RAIN_6H (7)
-// TODO
+#define MODULE_SUNRISE (8)
+#define MODULE_SUNSET (9)
+
+// More Module Ideas:
 // WEATHER
 //   UV index
 //   Temperature high today
 //   Temperature low today
 //   Wind direction & speed now
-//
-// ASTRONOMICAL
-//   Sunset
-//   Sunrise
 //
 // WATCH
 //   Quiet time
@@ -126,6 +126,8 @@ typedef struct Weather {
   int temp_deci_c;
   int rain_1h_dmm;
   int rain_6h_dmm;
+  time_t sunrise;
+  time_t sunset;
 } Weather;
 
 Weather s_weather;
@@ -342,6 +344,22 @@ static void draw_rain(GContext* ctx, GRect value, GRect title, struct tm* now, i
   draw_value(ctx, value);
 }
 
+static void draw_module_time(GContext* ctx, GRect value, GRect title, const char* desc, time_t time_secs) {
+  snprintf(s_buffer, BUFFER_LEN, "%s", desc);
+  draw_title(ctx, title);
+  if (time_secs == INVALID_TIME) {
+    snprintf(s_buffer, BUFFER_LEN, "%s", "--");
+  } else {
+    struct tm* time_struct = localtime(&time_secs);
+    if (clock_is_24h_style()) {
+      strftime(s_buffer, BUFFER_LEN, "%H:%M", time_struct);
+    } else {
+      strftime(s_buffer, BUFFER_LEN, "%l:%M", time_struct);
+    }
+  }
+  draw_value(ctx, value);
+}
+
 static void draw_module(GContext* ctx, uint8_t module_id, struct tm* now, GRect full_bbox, bool title_on_top, bool title_hide) {
   GRect value, title;
   hsplit_rect(ctx, full_bbox, &value, &title, title_on_top, title_hide);
@@ -359,6 +377,10 @@ static void draw_module(GContext* ctx, uint8_t module_id, struct tm* now, GRect 
     draw_rain(ctx, value, title, now, 1, s_weather.rain_1h_dmm);
   } else if (module_id == MODULE_RAIN_6H) {
     draw_rain(ctx, value, title, now, 6, s_weather.rain_6h_dmm);
+  } else if (module_id == MODULE_SUNRISE) {
+    draw_module_time(ctx, value, title, "Sunrise", s_weather.sunrise);
+  } else if (module_id == MODULE_SUNSET) {
+    draw_module_time(ctx, value, title, "Sunset", s_weather.sunset);
   }
   draw_separator(ctx, full_bbox, title_on_top);
 }
@@ -522,6 +544,8 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
 
   if ((t = dict_find(iter, MESSAGE_KEY_weather_rain_1h_dmm             ))) { s_weather.rain_1h_dmm  = t->value->int32; }
   if ((t = dict_find(iter, MESSAGE_KEY_weather_rain_6h_dmm             ))) { s_weather.rain_6h_dmm  = t->value->int32; }
+  if ((t = dict_find(iter, MESSAGE_KEY_sunrise                         ))) { s_weather.sunrise = t->value->int32; }
+  if ((t = dict_find(iter, MESSAGE_KEY_sunset                          ))) { s_weather.sunset = t->value->int32; }
   if ((t = dict_find(iter, MESSAGE_KEY_weather_now_temp_deci_c))) {
     s_weather.temp_deci_c = t->value->int32;
     s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
@@ -545,6 +569,8 @@ static void init(void) {
   s_weather.temp_deci_c = INVALID_TEMP;
   s_weather.rain_1h_dmm = INVALID_RAIN;
   s_weather.rain_6h_dmm = INVALID_RAIN;
+  s_weather.sunrise = INVALID_TIME;
+  s_weather.sunset = INVALID_TIME;
 
   s_last_request_sent = now_s;  // because js sends weather on "ready" event
   s_last_wake = now_s;  // Don't want the first update to compare against time 0.
