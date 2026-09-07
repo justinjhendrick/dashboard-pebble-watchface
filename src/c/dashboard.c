@@ -43,17 +43,16 @@ static int s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
 #define MODULE_RAIN_6H (7)
 #define MODULE_SUNRISE (8)
 #define MODULE_SUNSET (9)
+#define MODULE_WATCH_STATUS (10)
 
 // More Module Ideas:
 // WEATHER
 //   UV index
-//   Temperature high today
-//   Temperature low today
+//     this is hard because api.met.no only gives clear-sky UV index, maybe only for solar noon too?
+//   Temperature high/low today
+//     this is kinda hard because api.met.no doesn't split on day boundaries for me
 //   Wind direction & speed now
-//
-// WATCH
-//   Quiet time
-//   Bluetooth connected
+//     not sure if api.met.no has enough granularity for this to be meaningful, especially near mountains
 
 #define DEFAULT_TEMPERATURE_TENTHS (true)
 #define DEFAULT_LEADING_ZERO_IN_12H (false)
@@ -266,7 +265,7 @@ static void draw_separator(GContext* ctx, GRect bbox, bool title_on_top) {
   );
 }
 
-static void draw_batt(GContext* ctx, GRect value, GRect title, struct tm* now) {
+static void draw_batt(GContext* ctx, GRect value, GRect title) {
   snprintf(s_buffer, BUFFER_LEN, "%s", "Battery");
   draw_title(ctx, title);
 
@@ -285,7 +284,7 @@ static void draw_date(GContext* ctx, GRect value, GRect title, struct tm* now) {
   draw_text(ctx, s_buffer, s_font_md, value, GTextAlignmentCenter, 0);
 }
 
-static void draw_steps(GContext* ctx, GRect value, GRect title, struct tm* now) {
+static void draw_steps(GContext* ctx, GRect value, GRect title) {
   int steps = health_service_sum_today(HealthMetricStepCount);
   if (steps >= 10000) {
     snprintf(s_buffer, BUFFER_LEN, "%s", "kSteps");
@@ -299,7 +298,7 @@ static void draw_steps(GContext* ctx, GRect value, GRect title, struct tm* now) 
   draw_value(ctx, value);
 }
 
-static void draw_temp(GContext* ctx, GRect value, GRect title, struct tm* now) {
+static void draw_temp(GContext* ctx, GRect value, GRect title) {
   snprintf(s_buffer, BUFFER_LEN, "%s", "Weather");
   draw_title(ctx, title);
   if (s_weather.temp_deci_c == INVALID_TEMP) {
@@ -321,7 +320,7 @@ static void draw_temp(GContext* ctx, GRect value, GRect title, struct tm* now) {
   draw_value(ctx, value);
 }
 
-static void draw_heart_rate(GContext* ctx, GRect value, GRect title, struct tm* now) {
+static void draw_heart_rate(GContext* ctx, GRect value, GRect title) {
   snprintf(s_buffer, BUFFER_LEN, "%s", "Heart");
   draw_title(ctx, title);
   int bpm = health_service_peek_current_value(HealthMetricHeartRateBPM);
@@ -333,7 +332,7 @@ static void draw_heart_rate(GContext* ctx, GRect value, GRect title, struct tm* 
   draw_value(ctx, value);
 }
 
-static void draw_rain(GContext* ctx, GRect value, GRect title, struct tm* now, int hours, int rain_dmm) {
+static void draw_rain(GContext* ctx, GRect value, GRect title, int hours, int rain_dmm) {
   snprintf(s_buffer, BUFFER_LEN, "Rain %dh", hours);
   draw_title(ctx, title);
   if (rain_dmm == INVALID_RAIN) {
@@ -360,27 +359,38 @@ static void draw_module_time(GContext* ctx, GRect value, GRect title, const char
   draw_value(ctx, value);
 }
 
+static void draw_watch_status(GContext* ctx, GRect value, GRect title) {
+  snprintf(s_buffer, BUFFER_LEN, "%s", "Status");
+  draw_title(ctx, title);
+  char q = quiet_time_is_active() ? 'Q' : 'q';
+  char b = connection_service_peek_pebble_app_connection() ? 'B' : 'b';
+  snprintf(s_buffer, BUFFER_LEN, "%c %c", q, b);
+  draw_value(ctx, value);
+}
+
 static void draw_module(GContext* ctx, uint8_t module_id, struct tm* now, GRect full_bbox, bool title_on_top, bool title_hide) {
   GRect value, title;
   hsplit_rect(ctx, full_bbox, &value, &title, title_on_top, title_hide);
   if (module_id == MODULE_BATTERY) {
-    draw_batt(ctx, value, title, now);
+    draw_batt(ctx, value, title);
   } else if (module_id == MODULE_DATE) {
     draw_date(ctx, value, title, now);
   } else if (module_id == MODULE_STEPS) {
-    draw_steps(ctx, value, title, now);
+    draw_steps(ctx, value, title);
   } else if (module_id == MODULE_TEMP_NOW) {
-    draw_temp(ctx, value, title, now);
+    draw_temp(ctx, value, title);
   } else if (module_id == MODULE_HEART_RATE) {
-    draw_heart_rate(ctx, value, title, now);
+    draw_heart_rate(ctx, value, title);
   } else if (module_id == MODULE_RAIN_1H) {
-    draw_rain(ctx, value, title, now, 1, s_weather.rain_1h_dmm);
+    draw_rain(ctx, value, title, 1, s_weather.rain_1h_dmm);
   } else if (module_id == MODULE_RAIN_6H) {
-    draw_rain(ctx, value, title, now, 6, s_weather.rain_6h_dmm);
+    draw_rain(ctx, value, title, 6, s_weather.rain_6h_dmm);
   } else if (module_id == MODULE_SUNRISE) {
     draw_module_time(ctx, value, title, "Sunrise", s_weather.sunrise);
   } else if (module_id == MODULE_SUNSET) {
     draw_module_time(ctx, value, title, "Sunset", s_weather.sunset);
+  } else if (module_id == MODULE_WATCH_STATUS) {
+    draw_watch_status(ctx, value, title);
   }
   draw_separator(ctx, full_bbox, title_on_top);
 }
