@@ -1,7 +1,7 @@
 {
   "name": "Tempilation",
   "author": "justinjhendrick, SocketMix",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "keywords": [
     "pebble-watchface",
     "digital",
@@ -46,6 +46,7 @@
       "weather_rain_6h_dmm",
       "sunrise",
       "sunset",
+      "error_code",
       "module_top_left",
       "module_top_right",
       "module_bot_left",

@@ -19,6 +19,10 @@ static time_t s_last_request_sent = 0;
 #define MAX_WEATHER_RETRY_SECONDS (60 * 60)
 static int s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
 
+#define NUM_ERROR_CODES (4)
+static int s_error_codes[NUM_ERROR_CODES] = {0};
+static int s_error_code_idx = 0;
+
 #define DEBUG_BBOX (false)
 #define DEBUG_TIME (false)
 
@@ -44,6 +48,7 @@ static int s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
 #define MODULE_SUNRISE (8)
 #define MODULE_SUNSET (9)
 #define MODULE_WATCH_STATUS (10)
+#define MODULE_ERROR_CODES (11)
 
 // More Module Ideas:
 // WEATHER
@@ -368,6 +373,14 @@ static void draw_watch_status(GContext* ctx, GRect value, GRect title) {
   draw_value(ctx, value);
 }
 
+static void draw_error_codes(GContext* ctx, GRect value, GRect title) {
+  snprintf(s_buffer, BUFFER_LEN, "%s", "Error");
+  draw_title(ctx, title);
+  graphics_context_set_text_color(ctx, s_settings.color_corner_value);
+  snprintf(s_buffer, BUFFER_LEN, "%d %d\n%d %d", s_error_codes[0], s_error_codes[1], s_error_codes[2], s_error_codes[3]);
+  draw_text(ctx, s_buffer, s_font_sm, value, GTextAlignmentCenter, 0);
+}
+
 static void draw_module(GContext* ctx, uint8_t module_id, struct tm* now, GRect full_bbox, bool title_on_top, bool title_hide) {
   GRect value, title;
   hsplit_rect(ctx, full_bbox, &value, &title, title_on_top, title_hide);
@@ -391,6 +404,8 @@ static void draw_module(GContext* ctx, uint8_t module_id, struct tm* now, GRect 
     draw_module_time(ctx, value, title, "Sunset", s_weather.sunset);
   } else if (module_id == MODULE_WATCH_STATUS) {
     draw_watch_status(ctx, value, title);
+  } else if (module_id == MODULE_ERROR_CODES) {
+    draw_error_codes(ctx, value, title);
   }
   draw_separator(ctx, full_bbox, title_on_top);
 }
@@ -533,8 +548,28 @@ static void save_settings() {
   persist_write_data(SETTINGS_KEY, &s_settings, sizeof(ClaySettings));
 }
 
-static void inbox_received_handler(DictionaryIterator *iter, void *context) {
+static void save_error_code(int ec) {
+  s_error_codes[s_error_code_idx] = ec;
+  s_error_code_idx = (s_error_code_idx + 1) % NUM_ERROR_CODES;
+}
+
+static void inbox_dropped_handler(AppMessageResult reason, void* context) {
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Dropped because %d", reason);
+  // Error code scheme:
+  //   0 is a null error code
+  //   1-49 are from index.js
+  //   50-99 are from dashboard.c
+  //   100+ are from external servers (HTTP response codes)
+  save_error_code(50);
+}
+
+static void inbox_received_handler(DictionaryIterator *iter, void* context) {
   Tuple *t;
+
+  if ((t = dict_find(iter, MESSAGE_KEY_error_code))) {
+    save_error_code(t->value->int32);
+  }
+
   if ((t = dict_find(iter, MESSAGE_KEY_color_background             ))) { s_settings.color_background          = GColorFromHEX(t->value->int32); }
   if ((t = dict_find(iter, MESSAGE_KEY_color_time_text              ))) { s_settings.color_time_text           = GColorFromHEX(t->value->int32); }
   if ((t = dict_find(iter, MESSAGE_KEY_color_corner_title           ))) { s_settings.color_corner_title        = GColorFromHEX(t->value->int32); }
@@ -590,8 +625,9 @@ static void init(void) {
   backlight_service_subscribe(handle_backlight);
   on_wake(); // For SECONDS_ON_WAKE, loading the watch counts as a wakeup
 
+  app_message_register_inbox_dropped(inbox_dropped_handler);
   app_message_register_inbox_received(inbox_received_handler);
-  app_message_open(1024, 64);
+  app_message_open(2048, 64);
 
   s_window = window_create();
   window_set_window_handlers(s_window, (WindowHandlers) {

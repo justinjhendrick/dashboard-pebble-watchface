@@ -2,6 +2,14 @@ var Clay = require("@rebble/clay");
 var clayConfig = require("./config.json");
 var clay = new Clay(clayConfig);
 
+function sendToWatch(d) {
+  Pebble.sendAppMessage(
+    d,
+    function() {},
+    function(e) { console.log("Error sending to Pebble: " + e.error.message); }
+  );
+}
+
 function millis_from_secs(v) {
   return v * 1000;
 }
@@ -14,8 +22,19 @@ function millis_from_hours(v) {
   return millis_from_mins(v * 60);
 }
 
-function handleUnknown(e) {
+function handleAbort(e) {
   console.log("Something went wrong. " + JSON.stringify(e));
+  sendToWatch({error_code: 1});
+}
+
+function handleError(e) {
+  console.log("Something went wrong. " + JSON.stringify(e));
+  sendToWatch({error_code: 2});
+}
+
+function handleTimeout(e) {
+  console.log("Something went wrong. " + JSON.stringify(e));
+  sendToWatch({error_code: 3});
 }
 
 function getRequest(url, onload) {
@@ -25,9 +44,9 @@ function getRequest(url, onload) {
   var xhr = new XMLHttpRequest();
   xhr.addEventListener("load", function() { onload(this) });
   // TODO: more testing on these error handlers
-  xhr.addEventListener("abort", handleUnknown);
-  xhr.addEventListener("error", handleUnknown);
-  xhr.addEventListener("timeout", handleUnknown);
+  xhr.addEventListener("abort", handleAbort);
+  xhr.addEventListener("error", handleError);
+  xhr.addEventListener("timeout", handleTimeout);
   xhr.open("GET", url);
   xhr.timeout = 3000; // ms. but seems to have no effect?
   xhr.setRequestHeader("User-Agent", "https://github.com/justinjhendrick/dashboard-pebble-watchface");
@@ -65,18 +84,17 @@ function getSun() {
   }
   if (now <= sun_cache.time + millis_from_hours(24)) {
     console.log("resending cached sun");
-    Pebble.sendAppMessage(
+    sendToWatch(
       {
         sunrise: sun_cache.rise,
         sunset: sun_cache.set,
-      },
-      function() {},
-      function(e) { console.log("Error sending sun to Pebble: " + e.error.message); }
+      }
     );
     return;
   }
   if (location_cache.lat == null || location_cache.lon == null) {
     console.log("cannot get sunrise/sunset if we don't know where");
+    sendToWatch({error_code: 4});
     return;
   }
   var url =
@@ -87,6 +105,7 @@ function getSun() {
   getRequest(url, function(response) {
     if (response.status < 200 || response.status >= 300) {
       console.log("Error code from sun " + response.status);
+      sendToWatch({error_code: response.status});
       return;
     }
     var json = JSON.parse(response.responseText);
@@ -94,13 +113,11 @@ function getSun() {
     sun_cache.rise = Math.round(new Date(json.properties.sunrise.time).valueOf() / 1000);
     sun_cache.set = Math.round(new Date(json.properties.sunset.time).valueOf() / 1000);
     localStorage.setItem("sun_cache", JSON.stringify(sun_cache))
-    Pebble.sendAppMessage(
+    sendToWatch(
       {
         sunrise: sun_cache.rise,
         sunset: sun_cache.set,
-      },
-      function() {},
-      function(e) { console.log("Error sending sun to Pebble: " + e.error.message); }
+      }
     );
   });
 }
@@ -116,20 +133,19 @@ function getWeather() {
     && weather_cache.temp_deci_c != INVALID_TEMP
   ) {
     console.log("resending cached weather from " + weather_cache.time);
-    Pebble.sendAppMessage(
+    sendToWatch(
       {
         weather_now_temp_deci_c: weather_cache.temp_deci_c,
         weather_rain_1h_dmm: weather_cache.rain_1h_dmm,
         weather_rain_6h_dmm: weather_cache.rain_6h_dmm,
-      },
-      function() {},
-      function(e) { console.log("Error sending weather to Pebble: " + e.error.message); }
+      }
     );
     return;
   }
 
   if (location_cache.lat == null || location_cache.lon == null) {
     console.log("cannot get weather if we don't know where");
+    sendToWatch({error_code: 5});
     return;
   }
 
@@ -142,6 +158,7 @@ function getWeather() {
   getRequest(url, function(response) {
     if (response.status < 200 || response.status >= 300) {
       console.log("Error code from weather " + response.status);
+      sendToWatch({error_code: response.status});
       return;
     }
     var json = JSON.parse(response.responseText);
@@ -155,14 +172,12 @@ function getWeather() {
     weather_cache.rain_1h_dmm = rain_1h_dmm;
     weather_cache.rain_6h_dmm = rain_6h_dmm;
     localStorage.setItem("weather_cache_v2", JSON.stringify(weather_cache))
-    Pebble.sendAppMessage(
+    sendToWatch(
       {
         weather_now_temp_deci_c: weather_cache.temp_deci_c,
         weather_rain_1h_dmm: weather_cache.rain_1h_dmm,
         weather_rain_6h_dmm: weather_cache.rain_6h_dmm,
-      },
-      function() {},
-      function(e) { console.log("Error sending weather to Pebble: " + e.error.message); }
+      }
     );
   });
 }

@@ -58,5 +58,5 @@ static void draw_text(
     int shift_up
   ) {
   GRect fixed_bbox = GRect(bbox.origin.x, bbox.origin.y - shift_up, bbox.size.w, bbox.size.h);
-  graphics_draw_text(ctx, buffer, font, fixed_bbox, GTextOverflowModeFill, align, NULL);
+  graphics_draw_text(ctx, buffer, font, fixed_bbox, GTextOverflowModeWordWrap, align, NULL);
 }

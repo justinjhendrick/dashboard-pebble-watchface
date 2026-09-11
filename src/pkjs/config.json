@@ -50,7 +50,8 @@
           { "label": "Rain over 6 hours (mm)", "value": "7"  },
           { "label": "Sunrise time",           "value": "8"  },
           { "label": "Sunset time",            "value": "9"  },
-          { "label": "Quiet Time & Bluetooth", "value": "10" }
+          { "label": "Quiet Time & Bluetooth", "value": "10" },
+          { "label": "Error Codes",            "value": "11" }
         ]
       },
       { "type": "select", "messageKey": "module_top_right", "defaultValue": "2", "label": "module_top_right",
@@ -65,7 +66,8 @@
           { "label": "Rain over 6 hours (mm)", "value": "7"  },
           { "label": "Sunrise time",           "value": "8"  },
           { "label": "Sunset time",            "value": "9"  },
-          { "label": "Quiet Time & Bluetooth", "value": "10" }
+          { "label": "Quiet Time & Bluetooth", "value": "10" },
+          { "label": "Error Codes",            "value": "11" }
         ]
       },
       { "type": "select", "messageKey": "module_bot_left", "defaultValue": "3", "label": "module_bot_left",
@@ -80,7 +82,8 @@
           { "label": "Rain over 6 hours (mm)", "value": "7"  },
           { "label": "Sunrise time",           "value": "8"  },
           { "label": "Sunset time",            "value": "9"  },
-          { "label": "Quiet Time & Bluetooth", "value": "10" }
+          { "label": "Quiet Time & Bluetooth", "value": "10" },
+          { "label": "Error Codes",            "value": "11" }
         ]
       },
       { "type": "select", "messageKey": "module_bot_right", "defaultValue": "4", "label": "module_bot_right",
@@ -95,7 +98,8 @@
           { "label": "Rain over 6 hours (mm)", "value": "7"  },
           { "label": "Sunrise time",           "value": "8"  },
           { "label": "Sunset time",            "value": "9"  },
-          { "label": "Quiet Time & Bluetooth", "value": "10" }
+          { "label": "Quiet Time & Bluetooth", "value": "10" },
+          { "label": "Error Codes",            "value": "11" }
         ]
       }
     ]
