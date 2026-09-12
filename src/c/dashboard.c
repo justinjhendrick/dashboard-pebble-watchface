@@ -15,7 +15,7 @@ static GFont s_font_sm = NULL;
 static TimeUnits s_time_units = SECOND_UNIT;
 static time_t s_last_wake = 0;
 static time_t s_last_request_sent = 0;
-#define INIT_WEATHER_RETRY_SECONDS (5)
+#define INIT_WEATHER_RETRY_SECONDS (31) // this should be longer than phone side timeouts (15s for GPS and 15s for weather currently)
 #define MAX_WEATHER_RETRY_SECONDS (60 * 60)
 static int s_weather_retry_seconds = INIT_WEATHER_RETRY_SECONDS;
 

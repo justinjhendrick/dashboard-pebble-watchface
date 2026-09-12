@@ -2,6 +2,8 @@ var Clay = require("@rebble/clay");
 var clayConfig = require("./config.json");
 var clay = new Clay(clayConfig);
 
+var ENABLE_CACHE = true;
+
 function sendToWatch(d) {
   Pebble.sendAppMessage(
     d,
@@ -23,17 +25,17 @@ function millis_from_hours(v) {
 }
 
 function handleAbort(e) {
-  console.log("Something went wrong. " + JSON.stringify(e));
+  console.log("GET Abort. " + JSON.stringify(e));
   sendToWatch({error_code: 1});
 }
 
 function handleError(e) {
-  console.log("Something went wrong. " + JSON.stringify(e));
+  console.log("GET Error. " + JSON.stringify(e));
   sendToWatch({error_code: 2});
 }
 
 function handleTimeout(e) {
-  console.log("Something went wrong. " + JSON.stringify(e));
+  console.log("GET Timeout. " + JSON.stringify(e));
   sendToWatch({error_code: 3});
 }
 
@@ -43,12 +45,11 @@ function getRequest(url, onload) {
   // * https://github.com/Sichroteph/Weather-Graph/blob/master/src/pkjs/js/pebble_js_app.js
   var xhr = new XMLHttpRequest();
   xhr.addEventListener("load", function() { onload(this) });
-  // TODO: more testing on these error handlers
   xhr.addEventListener("abort", handleAbort);
   xhr.addEventListener("error", handleError);
   xhr.addEventListener("timeout", handleTimeout);
   xhr.open("GET", url);
-  xhr.timeout = 3000; // ms. but seems to have no effect?
+  xhr.timeout = millis_from_secs(15);
   xhr.setRequestHeader("User-Agent", "https://github.com/justinjhendrick/dashboard-pebble-watchface");
   xhr.send();
 }
@@ -82,7 +83,7 @@ function getSun() {
   if (sun_cache_str != null) {
     sun_cache = JSON.parse(sun_cache_str);
   }
-  if (now <= sun_cache.time + millis_from_hours(24)) {
+  if (ENABLE_CACHE && now <= sun_cache.time + millis_from_hours(24)) {
     console.log("resending cached sun");
     sendToWatch(
       {
@@ -122,6 +123,21 @@ function getSun() {
   });
 }
 
+function findNearest(timeseries) {
+  const now = new Date();
+  var nearest_point = null;
+  var min_diff = null;
+  for (const point of timeseries) {
+    const t = Date.parse(point.time);
+    const diff = Math.abs(t.valueOf() - now.valueOf());
+    if (min_diff == null || diff < min_diff) {
+      min_diff = diff;
+      nearest_point = point;
+    }
+  }
+  return nearest_point;
+}
+
 function getWeather() {
   var weather_cache_str = localStorage.getItem("weather_cache_v2")
   if (weather_cache_str != null) {
@@ -129,10 +145,11 @@ function getWeather() {
   }
 
   if (
-    Date.now() <= weather_cache.time + millis_from_mins(20)
+    ENABLE_CACHE
+    && Date.now() <= weather_cache.time + millis_from_mins(20)
     && weather_cache.temp_deci_c != INVALID_TEMP
   ) {
-    console.log("resending cached weather from " + weather_cache.time);
+    console.log("resending cached weather");
     sendToWatch(
       {
         weather_now_temp_deci_c: weather_cache.temp_deci_c,
@@ -162,9 +179,10 @@ function getWeather() {
       return;
     }
     var json = JSON.parse(response.responseText);
-    var temperature_celsius = json.properties.timeseries[0].data.instant.details.air_temperature;
-    var rain_1h_dmm = Math.round(json.properties.timeseries[0].data.next_1_hours.details.precipitation_amount * 10);
-    var rain_6h_dmm = Math.round(json.properties.timeseries[0].data.next_6_hours.details.precipitation_amount * 10);
+    var point = findNearest(json.properties.timeseries);
+    var temperature_celsius = point.data.instant.details.air_temperature;
+    var rain_1h_dmm = Math.round(point.data.next_1_hours.details.precipitation_amount * 10);
+    var rain_6h_dmm = Math.round(point.data.next_6_hours.details.precipitation_amount * 10);
     var temp_deci_c = Math.round(temperature_celsius * 10);
     console.log("Got Temp " + temperature_celsius + "C from remote server");
     weather_cache.time = Date.now();
@@ -208,7 +226,7 @@ function getLocation() {
     locationError,
     {
       timeout: millis_from_secs(15),
-      maximumAge: millis_from_mins(2 * 60),
+      maximumAge: millis_from_hours(2),
       enableHighAccuracy: false
     }
   );
