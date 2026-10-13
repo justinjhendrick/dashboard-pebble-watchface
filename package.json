@@ -1,7 +1,7 @@
 {
   "name": "Tempilation",
   "author": "justinjhendrick, SocketMix",
-  "version": "1.7.2",
+  "version": "1.8.0",
   "keywords": [
     "pebble-watchface",
     "digital",
@@ -23,7 +23,8 @@
     "enableMultiJS": true,
     "capabilities": [ "health" ],
     "targetPlatforms": [
-      "emery"
+      "emery",
+      "gabbro"
     ],
     "watchapp": {
       "watchface": true

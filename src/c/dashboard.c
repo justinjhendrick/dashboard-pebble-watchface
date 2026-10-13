@@ -25,6 +25,7 @@ static int s_error_code_idx = 0;
 
 #define DEBUG_BBOX (false)
 #define DEBUG_TIME (false)
+#define IS_ROUND (PBL_IF_ROUND_ELSE(true, false))
 
 #define SETTINGS_VERSION_KEY (1)
 #define SETTINGS_KEY (2)
@@ -487,10 +488,15 @@ static void update_layer(Layer* layer, GContext* ctx) {
 
   GRect bounds = layer_get_bounds(layer);
   GRect visible = layer_get_unobstructed_bounds(layer);
-  bool timeline_quick_view = visible.size.h < bounds.size.h - 1;
 
   graphics_context_set_fill_color(ctx, s_settings.color_background);
   graphics_fill_rect(ctx, visible, 0, GCornerNone);
+
+  if (IS_ROUND) {
+    bounds = grect_inset(bounds, GEdgeInsets(15));
+    visible = grect_inset(visible, GEdgeInsets(15));
+  }
+  bool timeline_quick_view = visible.size.h < bounds.size.h - 1;
 
   int time_bbox_height = draw_time(ctx, now, visible);
 
@@ -498,14 +504,21 @@ static void update_layer(Layer* layer, GContext* ctx) {
   GSize complication_size = GSize(visible.size.w / 2, complication_height);
   int left  = visible.origin.x + visible.size.w / 4;
   int right = visible.origin.x + visible.size.w * 3 / 4;
-  int top = visible.origin.y                 + complication_height / 2;
+  int middle = visible.origin.x + visible.size.w / 2;
+  int top = visible.origin.y                  + complication_height / 2;
   int bot = visible.origin.y + visible.size.h - complication_height / 2;
   bool title_hide = timeline_quick_view;
 
-  draw_module(ctx, s_settings.module_top_left, now, rect_from_center(GPoint(left,  top), complication_size), true, title_hide);
-  draw_module(ctx, s_settings.module_top_right, now, rect_from_center(GPoint(right, top), complication_size), true, title_hide);
-  draw_module(ctx, s_settings.module_bot_left, now, rect_from_center(GPoint(left,  bot), complication_size), false, title_hide);
-  draw_module(ctx, s_settings.module_bot_right, now, rect_from_center(GPoint(right, bot), complication_size), false, title_hide);
+  if (IS_ROUND && !timeline_quick_view) {
+    draw_module(ctx, s_settings.module_top_right, now, rect_from_center(GPoint(middle,  top), complication_size), true, title_hide);
+    draw_module(ctx, s_settings.module_bot_right, now, rect_from_center(GPoint(middle,  bot), complication_size), false, title_hide);
+  }
+  if (!IS_ROUND) {
+    draw_module(ctx, s_settings.module_top_left, now, rect_from_center(GPoint(left,  top), complication_size), true, title_hide);
+    draw_module(ctx, s_settings.module_top_right, now, rect_from_center(GPoint(right, top), complication_size), true, title_hide);
+    draw_module(ctx, s_settings.module_bot_left, now, rect_from_center(GPoint(left,  bot), complication_size), false, title_hide);
+    draw_module(ctx, s_settings.module_bot_right, now, rect_from_center(GPoint(right, bot), complication_size), false, title_hide);
+  }
 }
 
 static void window_load(Window* window) {
