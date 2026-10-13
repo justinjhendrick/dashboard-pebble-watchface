@@ -38,7 +38,7 @@
     "type": "section",
     "items": [
       { "type": "heading", "defaultValue": "Modules" },
-      { "type": "select", "messageKey": "module_top_left", "defaultValue": "1", "label": "module_top_left", "capabilities": "PLATFORM_EMERY",
+      { "type": "select", "messageKey": "module_top_left", "defaultValue": "1", "label": "module_top_left", "capabilities": ["PLATFORM_EMERY"],
         "options": [
           { "label": "None",                   "value": "0"  },
           { "label": "Battery",                "value": "1"  },
@@ -70,7 +70,7 @@
           { "label": "Error Codes",            "value": "11" }
         ]
       },
-      { "type": "select", "messageKey": "module_bot_left", "defaultValue": "3", "label": "module_bot_left", "capabilities": "PLATFORM_EMERY",
+      { "type": "select", "messageKey": "module_bot_left", "defaultValue": "3", "label": "module_bot_left", "capabilities": ["PLATFORM_EMERY"],
         "options": [
           { "label": "None",                   "value": "0"  },
           { "label": "Battery",                "value": "1"  },

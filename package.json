@@ -14,7 +14,7 @@
   ],
   "private": false,
   "dependencies": {
-    "@rebble/clay": "^1.0.8"
+    "@rebble/clay": "^1.1.0"
   },
   "pebble": {
     "displayName": "Tempilation",
